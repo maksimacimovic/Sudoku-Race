@@ -34,7 +34,8 @@
   /* vertical chrome around the board — keep in sync with --chrome below */
   --pad-h:52px; --pad-top:14px; --disc:48px; --act-top:18px; --disc-font:19px;
   --auto-h:48px; --auto-top:10px;  /* reserved Auto-complete slot */
-  --chrome:340px;                  /* measured: 338px of chrome + 2px slack */
+  --rail-gap:46px;                 /* breathing room between the bar and the board */
+  --chrome:384px;                  /* measured from the DOM, incl. --rail-gap */
   /* board geometry — 369px at design size; shrinks to fit narrow OR short screens
      so the whole layout always fits the viewport without scrolling */
   --board:min(369px, calc(100vw - 24px), calc(100dvh - var(--chrome)));
@@ -115,7 +116,7 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .portrait.pop{animation:srAvPop 420ms cubic-bezier(.2,1.4,.3,1) 1;}
 
 /* ---------- board ---------- */
-.boardwrap{position:relative; flex:none; align-self:center; margin-top:2px;}
+.boardwrap{position:relative; flex:none; align-self:center; margin-top:var(--rail-gap);}
 #board{width:var(--board); height:var(--board); display:grid;
   grid-template-columns:repeat(9,1fr); grid-template-rows:repeat(9,1fr);
   background:var(--card); border:2.48px solid var(--board-box); touch-action:none;}
@@ -203,7 +204,8 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   :root{
     --pad-h:46px; --pad-top:12px; --disc:40px; --act-top:14px; --disc-font:16px;
     --auto-h:40px; --auto-top:8px;
-    --chrome:310px;
+    --rail-gap:22px;
+    --chrome:330px;
   }
 }
 
