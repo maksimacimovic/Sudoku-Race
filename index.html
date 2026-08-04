@@ -190,7 +190,8 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   pointer-events:none; transform:none;}
 
 /* ---------- action row (prototype controls, design's icon+label idiom) ---------- */
-.actions{display:flex; justify-content:space-around; padding:var(--act-top) 12px 0; flex:none;}
+/* space-between so Undo sits flush left and Emotes flush right */
+.actions{display:flex; justify-content:space-between; padding:var(--act-top) 12px 0; flex:none;}
 /* Auto complete sits in a slot whose height is always reserved (and counted in
    --chrome), so showing or hiding the button never moves the board. */
 .autoslot{flex:none; height:var(--auto-h); margin-top:var(--auto-top);
@@ -202,6 +203,9 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   background:var(--press); color:var(--fg-5); display:flex; align-items:center;
   justify-content:center; font:700 var(--disc-font)/1 var(--font);}
 .act .disc svg{width:calc(var(--disc) * .5); height:calc(var(--disc) * .5); fill:currentColor;}
+/* the speech bubble reads better outlined, with solid dots */
+.act .disc svg.bubble{fill:none; stroke:currentColor; stroke-width:2;}
+.act .disc svg.bubble circle{fill:currentColor; stroke:none;}
 .act .cap{font:400 10px/1 var(--font); color:var(--fg-4);}
 .act.on .disc{background:var(--teal-700); color:#fff;}
 .act.on .cap{color:var(--teal-700); font-weight:700;}
@@ -423,6 +427,13 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
     <button class="act" id="btnNotes">
       <span class="disc"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span class="badge" id="notesBadge">OFF</span></span>
       <span class="cap">Notes</span>
+    </button>
+    <button class="act" id="btnEmotes">
+      <span class="disc"><svg class="bubble" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3.5V16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke-linejoin="round"/>
+        <circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="10" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/>
+      </svg></span>
+      <span class="cap">Emotes</span>
     </button>
   </div>
 
@@ -953,6 +964,9 @@ function syncControls(){
   $('btnUndo').disabled  = !S || locked || S.history.length===0;
   $('btnErase').disabled = !S || locked;
   $('btnNotes').disabled = !S || locked;
+  // TODO(emotes): open an emoji tray here and relay the pick to the opponent
+  // over the existing socket. No handler yet — the button is a placeholder.
+  $('btnEmotes').disabled = !S || locked;
 }
 $('btnUndo').addEventListener('click', undo);
 $('btnErase').addEventListener('click', erase);
