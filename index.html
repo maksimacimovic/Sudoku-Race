@@ -34,12 +34,14 @@
   /* vertical chrome around the board — keep in sync with --chrome below */
   --pad-h:52px; --pad-top:14px; --disc:48px; --act-top:18px; --disc-font:19px;
   --auto-h:48px; --auto-top:10px;  /* reserved Auto-complete slot */
+  --av:96px; --av-ring:3px;        /* portrait size + its coloured ring */
   --lives-h:18px;                  /* heart size, above each portrait */
   --rail-gap:22px;                 /* bar -> board breathing room */
-  --chrome:418px;                  /* measured from the DOM (416) + 2px slack */
+  --chrome:470px;                  /* measured from the DOM (468) + 2px slack */
   /* board geometry — 369px at design size; shrinks to fit narrow OR short screens
      so the whole layout always fits the viewport without scrolling */
-  --board:min(369px, calc(100vw - 24px), calc(100dvh - var(--chrome)));
+  --board:min(369px, calc(100vw - 24px),
+                calc(100dvh - var(--chrome) - env(safe-area-inset-bottom)));
   --cell:calc(var(--board) / 9);
   --snap:180ms cubic-bezier(.2,1.4,.3,1);
 }
@@ -74,15 +76,15 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   width:var(--board); align-self:center;}
 .railtop{display:flex; justify-content:space-between; align-items:flex-end;}
 .side{display:flex; flex-direction:column; align-items:center; gap:4px;
-  width:62px; flex:none;}
-.portrait{position:relative; width:44px; height:44px; border-radius:11px;
-  overflow:hidden; background:#fff;}
+  width:var(--av); flex:none;}
+.portrait{position:relative; width:var(--av); height:var(--av);
+  border-radius:calc(var(--av) * .25); overflow:hidden; background:#fff;}
 .portrait svg{width:100%; height:100%; display:block;}
-.me  .portrait{box-shadow:0 0 0 2px var(--teal-700);}
-.op  .portrait{box-shadow:0 0 0 2px var(--danger);}
-.locked .me .portrait{box-shadow:0 0 0 2px var(--teal-300);}
+.me  .portrait{box-shadow:0 0 0 var(--av-ring) var(--teal-700);}
+.op  .portrait{box-shadow:0 0 0 var(--av-ring) var(--danger);}
+.locked .me .portrait{box-shadow:0 0 0 var(--av-ring) var(--teal-300);}
 .sidename{font:700 11px/1.2 var(--font); white-space:nowrap;
-  max-width:62px; overflow:hidden; text-overflow:ellipsis;}
+  max-width:var(--av); overflow:hidden; text-overflow:ellipsis;}
 .me .sidename{color:var(--teal-700);}
 .op .sidename{color:var(--danger);}
 .locked .me .sidename{color:var(--teal-300);}
@@ -253,8 +255,9 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   :root{
     --pad-h:46px; --pad-top:12px; --disc:40px; --act-top:14px; --disc-font:16px;
     --auto-h:40px; --auto-top:8px;
+    --av:56px; --av-ring:2px;
     --lives-h:16px; --rail-gap:12px;
-    --chrome:376px;   /* measured 374 + 2px slack */
+    --chrome:388px;   /* measured 386 + 2px slack */
   }
 }
 
