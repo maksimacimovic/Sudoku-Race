@@ -1043,10 +1043,15 @@ function paintPenalties(now){
 function paintRail(){
   const myFilled = S.grid.filter((v,i)=>S.puzzle[i]==='0' && v!==0).length;
   const myProg = myFilled/S.totalEmpty;              // TRUE progress
-  const opProg = opponentDisplay(myProg);            // deceptive value, as tuned
+  // Solo hides the ghost's real pace (milestone gating + lead clamp) so a
+  // scripted opponent reads as plausible. Against a real player there is
+  // nothing to disguise, so show their true progress.
+  const opCells = game.mode==='mp'
+    ? S.ghostFilled
+    : Math.round(opponentDisplay(myProg) * S.totalEmpty);
   // quantise BOTH to notches for drawing only — the values above stay exact
   const myShown = notchFrac(myFilled, S.totalEmpty);
-  const opShown = notchFrac(Math.round(opProg*S.totalEmpty), S.totalEmpty);
+  const opShown = notchFrac(opCells, S.totalEmpty);
   // each fill ends exactly under its own pin, so pin and bar always agree
   const myX = placePin($('pinMe'), myShown);
   const opX = placePin($('pinRival'), opShown);
