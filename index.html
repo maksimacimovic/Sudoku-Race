@@ -190,19 +190,22 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   pointer-events:none; transform:none;}
 
 /* ---------- action row (prototype controls, design's icon+label idiom) ---------- */
-/* space-between so Undo sits flush left and Emotes flush right */
-.actions{display:flex; justify-content:space-between; padding:var(--act-top) 12px 0; flex:none;}
-/* The tool row and the emote row occupy the same slot — whichever is showing
-   fills the space left of the Emotes button, so the row height never changes. */
-.toolrow{display:flex; justify-content:space-between; flex:1; padding-right:12px;}
-.emoterow{display:flex; align-items:center; justify-content:space-around; flex:1;
-  padding-right:12px; touch-action:none;}
+/* Four equal columns: the tool row takes three shares (one per tool) and the
+   Emotes button one, and every button centres in its own share — so all four
+   end up evenly spread. The tool row and emote row occupy the same slot, so the
+   row height never changes when the picker opens. */
+.actions{display:flex; padding:var(--act-top) 12px 0; flex:none;}
+.toolrow{display:flex; flex:3;}
+.emoterow{display:flex; align-items:center; justify-content:space-around; flex:3;
+  touch-action:none;}
 .emote{width:40px; height:40px; flex:none; border:none; padding:0; border-radius:10px;
   background:var(--card); box-shadow:0 0 0 1px var(--border-soft);
   font-size:23px; line-height:1; display:flex; align-items:center; justify-content:center;
   cursor:pointer; touch-action:none;
   transition:transform 110ms ease, box-shadow 110ms ease;}
 .emote.hot{transform:scale(1.3); box-shadow:0 0 0 2px var(--teal-700);}
+/* five 40px tiles get cramped on narrow phones — keyed on width, not height */
+@media (max-width:360px){ .emote{width:34px; height:34px; font-size:19px;} }
 #btnEmotes{touch-action:none;}
 /* the chosen emote lands on your end of the bar */
 .emotepop{position:absolute; top:50%; z-index:3; width:34px; height:34px;
@@ -222,8 +225,8 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .autoslot{flex:none; height:var(--auto-h); margin-top:var(--auto-top);
   display:flex; align-items:center; padding:0 12px;}
 .autobtn{height:var(--auto-h); padding:0; font-size:15px;}
-.act{display:flex; flex-direction:column; align-items:center; gap:5px; background:none;
-  border:none; padding:0; cursor:pointer;}
+.act{flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
+  background:none; border:none; padding:0; cursor:pointer;}
 .act .disc{position:relative; width:var(--disc); height:var(--disc); border-radius:var(--r-pill);
   background:var(--press); color:var(--fg-5); display:flex; align-items:center;
   justify-content:center; font:700 var(--disc-font)/1 var(--font);}
