@@ -207,18 +207,20 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 /* five 40px tiles get cramped on narrow phones — keyed on width, not height */
 @media (max-width:360px){ .emote{width:34px; height:34px; font-size:19px;} }
 #btnEmotes{touch-action:none;}
-/* the chosen emote lands on your end of the bar */
-.emotepop{position:absolute; top:50%; z-index:3; width:34px; height:34px;
-  border-radius:9px; display:flex; align-items:center; justify-content:center;
-  font-size:21px; background:var(--card); box-shadow:0 2px 8px rgba(10,10,10,.28);
-  pointer-events:none; opacity:0; transform:translateY(-50%) scale(.4);}
-#emoteMe{left:0;} #emoteOp{right:0;}
+/* the chosen emote rides at that player's position on the bar */
+.emoteanchor{position:absolute; top:50%; left:0; z-index:3;
+  transform:translate(-50%,-50%); pointer-events:none;
+  transition:left var(--snap);}
+.emotepop{width:34px; height:34px; border-radius:9px; display:flex;
+  align-items:center; justify-content:center; font-size:21px;
+  background:var(--card); box-shadow:0 2px 8px rgba(10,10,10,.28);
+  opacity:0; transform:scale(.4);}
 @keyframes srEmotePop{
-  0%{opacity:0; transform:translateY(-50%) scale(.4)}
-  8%{opacity:1; transform:translateY(-50%) scale(1.18)}
-  16%{transform:translateY(-50%) scale(1)}
-  86%{opacity:1; transform:translateY(-50%) scale(1)}
-  100%{opacity:0; transform:translateY(-50%) scale(.9)}}
+  0%{opacity:0; transform:scale(.4)}
+  8%{opacity:1; transform:scale(1.18)}
+  16%{transform:scale(1)}
+  86%{opacity:1; transform:scale(1)}
+  100%{opacity:0; transform:scale(.9)}}
 .emotepop.show{animation:srEmotePop 2600ms ease-out 1 both;}
 /* Auto complete sits in a slot whose height is always reserved (and counted in
    --chrome), so showing or hiding the button never moves the board. */
@@ -422,8 +424,8 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
         <path d="M2 8l4.2 3.2L12 4l5.8 7.2L22 8l-2 10H4L2 8z" fill="#FFB100"/>
         <path d="M4 18h16l-.6 3H4.6L4 18z" fill="#FF8838"/>
       </svg>
-      <div class="emotepop" id="emoteMe"></div>
-      <div class="emotepop" id="emoteOp"></div>
+      <div class="emoteanchor" id="anchorMe"><div class="emotepop" id="emoteMe"></div></div>
+      <div class="emoteanchor" id="anchorOp"><div class="emotepop" id="emoteOp"></div></div>
       <div class="track">
         <div class="half" id="railMe"></div>
         <div class="half" id="railRival"></div>
@@ -724,7 +726,7 @@ const cfg = {
 let S = null;
 const $ = id => document.getElementById(id);
 const boardEl=$('board'), lockEl=$('lockout'), badgeEl=$('lockbadge'), padEl=$('pad'),
-      wrapEl=$('wrap');
+      wrapEl=$('wrap'), trackEl=document.querySelector('.track');
 
 /* avatars — inline SVG so the file stays self-contained (no external images) */
 function avatarSVG(skin,hair,shirt){
@@ -1016,6 +1018,12 @@ EMOTES.forEach(ch=>{
   $('emoteRow').appendChild(b);
 });
 
+/* keep the 34px tile on the bar rather than half-hanging off an end */
+function placeEmote(el,pct){
+  const W = trackEl.clientWidth || 369;
+  const half = (17/W)*100;
+  el.style.left = Math.max(half, Math.min(100-half, pct)).toFixed(2)+'%';
+}
 function showEmote(side, ch){
   const el = $(side==='me' ? 'emoteMe' : 'emoteOp');
   el.textContent = ch;
@@ -1213,6 +1221,9 @@ function paintRail(){
     : notchFrac(Math.round(opponentDisplay(myProg) * S.totalEmpty), S.totalEmpty);
   $('railMe').style.width    = (myShown*50).toFixed(2)+'%';
   $('railRival').style.width = (opShown*50).toFixed(2)+'%';
+  // emotes ride the leading edge of each fill
+  placeEmote($('anchorMe'), myShown*50);
+  placeEmote($('anchorOp'), 100 - opShown*50);
   // pop a portrait as its side gains ground
   if(opShown!==S.ghostShownAt){
     if(S.ghostShownAt>=0) popPortrait($('avRival'));
