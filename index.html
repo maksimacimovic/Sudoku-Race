@@ -192,6 +192,31 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 /* ---------- action row (prototype controls, design's icon+label idiom) ---------- */
 /* space-between so Undo sits flush left and Emotes flush right */
 .actions{display:flex; justify-content:space-between; padding:var(--act-top) 12px 0; flex:none;}
+/* The tool row and the emote row occupy the same slot — whichever is showing
+   fills the space left of the Emotes button, so the row height never changes. */
+.toolrow{display:flex; justify-content:space-between; flex:1; padding-right:12px;}
+.emoterow{display:flex; align-items:center; justify-content:space-around; flex:1;
+  padding-right:12px; touch-action:none;}
+.emote{width:40px; height:40px; flex:none; border:none; padding:0; border-radius:10px;
+  background:var(--card); box-shadow:0 0 0 1px var(--border-soft);
+  font-size:23px; line-height:1; display:flex; align-items:center; justify-content:center;
+  cursor:pointer; touch-action:none;
+  transition:transform 110ms ease, box-shadow 110ms ease;}
+.emote.hot{transform:scale(1.3); box-shadow:0 0 0 2px var(--teal-700);}
+#btnEmotes{touch-action:none;}
+/* the chosen emote lands on your end of the bar */
+.emotepop{position:absolute; top:50%; z-index:3; width:34px; height:34px;
+  border-radius:9px; display:flex; align-items:center; justify-content:center;
+  font-size:21px; background:var(--card); box-shadow:0 2px 8px rgba(10,10,10,.28);
+  pointer-events:none; opacity:0; transform:translateY(-50%) scale(.4);}
+#emoteMe{left:0;} #emoteOp{right:0;}
+@keyframes srEmotePop{
+  0%{opacity:0; transform:translateY(-50%) scale(.4)}
+  8%{opacity:1; transform:translateY(-50%) scale(1.18)}
+  16%{transform:translateY(-50%) scale(1)}
+  86%{opacity:1; transform:translateY(-50%) scale(1)}
+  100%{opacity:0; transform:translateY(-50%) scale(.9)}}
+.emotepop.show{animation:srEmotePop 2600ms ease-out 1 both;}
 /* Auto complete sits in a slot whose height is always reserved (and counted in
    --chrome), so showing or hiding the button never moves the board. */
 .autoslot{flex:none; height:var(--auto-h); margin-top:var(--auto-top);
@@ -385,6 +410,8 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
         <path d="M2 8l4.2 3.2L12 4l5.8 7.2L22 8l-2 10H4L2 8z" fill="#FFB100"/>
         <path d="M4 18h16l-.6 3H4.6L4 18z" fill="#FF8838"/>
       </svg>
+      <div class="emotepop" id="emoteMe"></div>
+      <div class="emotepop" id="emoteOp"></div>
       <div class="track">
         <div class="half" id="railMe"></div>
         <div class="half" id="railRival"></div>
@@ -416,6 +443,7 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   <div class="pad" id="pad"></div>
 
   <div class="actions" id="actions">
+    <div class="toolrow" id="toolRow">
     <button class="act" id="btnUndo">
       <span class="disc"><svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg></span>
       <span class="cap">Undo</span>
@@ -428,6 +456,9 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
       <span class="disc"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span class="badge" id="notesBadge">OFF</span></span>
       <span class="cap">Notes</span>
     </button>
+    </div>
+    <!-- swaps in over the three tools while the Emotes button is held -->
+    <div class="emoterow" id="emoteRow" hidden></div>
     <button class="act" id="btnEmotes">
       <span class="disc"><svg class="bubble" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M5 4h14a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7l-4.5 3.5V16H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke-linejoin="round"/>
@@ -964,13 +995,84 @@ function syncControls(){
   $('btnUndo').disabled  = !S || locked || S.history.length===0;
   $('btnErase').disabled = !S || locked;
   $('btnNotes').disabled = !S || locked;
-  // TODO(emotes): open an emoji tray here and relay the pick to the opponent
-  // over the existing socket. No handler yet — the button is a placeholder.
-  $('btnEmotes').disabled = !S || locked;
+  $('btnEmotes').disabled = !S || locked || performance.now() < emoteCoolUntil;
 }
 $('btnUndo').addEventListener('click', undo);
 $('btnErase').addEventListener('click', erase);
 $('btnNotes').addEventListener('click', toggleNotes);
+
+/* ---------- emotes ----------
+   Press and hold the Emotes button: the three tools give way to a row of five
+   emoji. Keep holding, slide onto one, release to send it. Releasing anywhere
+   else cancels. Swap the characters below to change the set. */
+const EMOTES = ['😠','🤩','😮','😢','😅'];
+const EMOTE_COOLDOWN_MS = 1200;      // stops one player flooding the other's screen
+let emoteCoolUntil = 0;
+
+EMOTES.forEach(ch=>{
+  const b=document.createElement('button');
+  b.className='emote'; b.type='button'; b.textContent=ch; b.dataset.e=ch;
+  b.setAttribute('aria-label','Send '+ch);
+  $('emoteRow').appendChild(b);
+});
+
+function showEmote(side, ch){
+  const el = $(side==='me' ? 'emoteMe' : 'emoteOp');
+  el.textContent = ch;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+}
+function sendEmote(ch){
+  if(performance.now() < emoteCoolUntil) return;
+  emoteCoolUntil = performance.now() + EMOTE_COOLDOWN_MS;
+  showEmote('me', ch);
+  if(game.mode==='mp') net.send({t:'emote', e:ch});
+  syncControls();
+  setTimeout(syncControls, EMOTE_COOLDOWN_MS + 20);
+}
+
+/* hold-and-slide picker */
+let emoteHolding=false, emoteHot=null;
+function emoteAt(x,y){
+  return [...$('emoteRow').children].find(b=>{
+    const r=b.getBoundingClientRect();
+    // generous vertical band so a sloppy slide still registers
+    return x>=r.left-4 && x<=r.right+4 && y>=r.top-22 && y<=r.bottom+22;
+  }) || null;
+}
+function setHot(el){
+  if(el===emoteHot) return;
+  if(emoteHot) emoteHot.classList.remove('hot');
+  emoteHot=el;
+  if(emoteHot) emoteHot.classList.add('hot');
+}
+function openEmotes(){
+  $('toolRow').hidden=true; $('emoteRow').hidden=false;
+}
+function closeEmotes(){
+  setHot(null);
+  $('emoteRow').hidden=true; $('toolRow').hidden=false;
+}
+$('btnEmotes').addEventListener('pointerdown', e=>{
+  if($('btnEmotes').disabled) return;
+  e.preventDefault();
+  emoteHolding=true;
+  try{ $('btnEmotes').setPointerCapture(e.pointerId); }catch(_){}
+  openEmotes();
+});
+$('btnEmotes').addEventListener('pointermove', e=>{
+  if(!emoteHolding) return;
+  setHot(emoteAt(e.clientX, e.clientY));
+});
+function endEmoteHold(fire){
+  if(!emoteHolding) return;
+  emoteHolding=false;
+  const pick = fire && emoteHot ? emoteHot.dataset.e : null;
+  closeEmotes();
+  if(pick) sendEmote(pick);
+}
+$('btnEmotes').addEventListener('pointerup',     ()=>endEmoteHold(true));
+$('btnEmotes').addEventListener('pointercancel', ()=>endEmoteHold(false));
+$('btnEmotes').addEventListener('lostpointercapture', ()=>endEmoteHold(false));
 
 /* ---------- lockout overlay ---------- */
 function applyLockoutMask(){
@@ -1509,6 +1611,10 @@ function onNetMessage(m){
 
     case 'lockout':                          // drives their shake, red X and counters
       if(S) S.ghostLockUntil = performance.now() + (m.ms|0);
+      break;
+
+    case 'emote':                            // lands on their end of the bar
+      if(typeof m.e==='string' && m.e.length<=8) showEmote('op', m.e);
       break;
 
     case 'finished':

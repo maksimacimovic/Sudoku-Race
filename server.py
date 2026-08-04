@@ -18,6 +18,7 @@ client -> server
   {"t":"progress", "filled":int}
   {"t":"lockout",  "ms":int}
   {"t":"finished", "ms":int, "mistakes":int, "lockouts":int, "lockedMs":int}
+  {"t":"emote",    "e":str}               # a single emoji character
   {"t":"rematch",  "same":bool}
   {"t":"leave"}
 
@@ -42,7 +43,7 @@ from websockets.http11 import Response
 from websockets.datastructures import Headers
 
 CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"   # no O/0/I/1
-RELAYED = {"progress", "lockout", "finished"}
+RELAYED = {"progress", "lockout", "finished", "emote"}
 
 # code -> {"players": [player, ...], "difficulty": str, "poolSize": int,
 #          "board": int|None, "rematch": {id: bool}}
