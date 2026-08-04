@@ -1,0 +1,1620 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#F9F9F9">
+<title>Sudoku Race</title>
+<style>
+/* =========================================================================
+   Sudoku Rivals — Race mode. Tokens lifted from the design system's
+   colors_and_type.css so the values stay recognisable when they change there.
+   ========================================================================= */
+:root{
+  /* brand */
+  --teal-900:#0B2F3C; --teal-700:#165B73; --teal-300:#7299BC;
+  --teal-100:#C1D8F1; --teal-50:#EBF7FB;
+  /* board */
+  --num-base:#0A0A0A; --num-solved:#145A71; --num-error:#E54141;
+  --hl-soft:#EBF7FB; --hl-hard:#AFE0F1;
+  --board-grid:#CBCBCB; --board-box:#676767;
+  /* rival rail */
+  --rail-bg:#DCE1E2; --rival:#A9B4C2; --rival-ink:#8E9AA6;
+  --rank-gold:#FFB100; --rank-gold-dim:#FF8838;
+  /* neutrals — light mode */
+  --bg:#F9F9F9; --card:#FFFFFF; --press:#D9D9D9;
+  --fg-1:#0A0A0A; --fg-3:#3F3F3F; --fg-4:#676767; --fg-5:#939393;
+  --border:#CBCBCB; --border-soft:#D9D9D9;
+  --danger:#E54141; --danger-dim:#AA2929; --danger-tint:#F8C9C9;
+  --lock-ring:#54B3F0;             /* lockout countdown ring (DS --streak-freeze) */
+  /* radii + press lip (the system's hallmark: inset bottom lip, not a drop shadow) */
+  --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:24px; --r-pill:999px;
+  --pad-lip:0 4px 0 0 #5797A9;
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* vertical chrome around the board — keep in sync with --chrome below */
+  --av:42px; --rail-h:156px; --track-top:68px; --pin-me-top:85px;
+  --pad-h:52px; --pad-top:14px; --disc:48px; --act-top:18px; --disc-font:19px;
+  --auto-h:48px; --auto-top:10px;  /* reserved Auto-complete slot */
+  --chrome:428px;                  /* everything that isn't the board, vertically */
+  /* board geometry — 369px at design size; shrinks to fit narrow OR short screens
+     so the whole layout always fits the viewport without scrolling */
+  --board:min(369px, calc(100vw - 24px), calc(100dvh - var(--chrome)));
+  --cell:calc(var(--board) / 9);
+  --snap:180ms cubic-bezier(.2,1.4,.3,1);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+/* author display rules would otherwise beat the UA's [hidden] rule */
+[hidden]{display:none !important;}
+html,body{margin:0; padding:0; background:var(--bg); color:var(--fg-1);
+  font-family:var(--font); -webkit-font-smoothing:antialiased;
+  touch-action:manipulation; overscroll-behavior:none;}
+.wrap{max-width:393px; margin:0 auto; min-height:100dvh; display:flex; flex-direction:column;
+  padding:0 12px calc(16px + env(safe-area-inset-bottom));}
+
+/* ---------- header: pause · RACE/timer · settings ---------- */
+header{height:44px; display:flex; align-items:center; justify-content:space-between; flex:none;}
+.iconbtn{width:32px; height:32px; border:none; border-radius:var(--r-pill); background:var(--press);
+  color:var(--fg-4); display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;}
+.iconbtn svg{width:19px; height:19px; fill:currentColor;}
+.iconbtn:active{transform:scale(.94);}
+.iconbtn.subtle{background:none; color:var(--border);}   /* dev control, kept quiet */
+/* left/right header clusters, equal min-width so the timer stays centred */
+.hgroup{display:flex; align-items:center; gap:8px; min-width:72px;}
+.hgroup.right{justify-content:flex-end;}
+.hstack{display:flex; flex-direction:column; align-items:center; gap:3px;}
+.hstack .meta{font:400 9px/1 var(--font); letter-spacing:.08em; color:var(--fg-5);}
+.hstack .timer{font:700 16px/1 var(--font); color:var(--fg-3); font-variant-numeric:tabular-nums;}
+
+/* ---------- one shared race rail, two map pins ---------- */
+.rail{position:relative; height:var(--rail-h); flex:none; margin-top:2px;}
+/* The track is inset by half a pin so a pin at either end sits fully inside the
+   rail. That makes the pin's whole travel equal the whole visible bar: at 100%
+   the fill is genuinely full and the pin is genuinely at the end. */
+.track{position:absolute; left:calc(var(--av)/2); right:calc(var(--av)/2);
+  top:var(--track-top); height:18px; border-radius:var(--r-pill);
+  background:var(--rail-bg); overflow:hidden;}
+.trackfill{position:absolute; left:0; top:0; bottom:0; border-radius:var(--r-pill);
+  transition:width var(--snap);}
+#railRival{background:var(--rival);}                 /* rival sits behind … */
+#railMe{background:var(--teal-700);}                 /* … your teal draws in front */
+.locked #railMe{background:var(--teal-300);}         /* desaturates while locked */
+.pin{position:absolute; transform:translateX(-50%); display:flex; flex-direction:column;
+  align-items:center; transition:left var(--snap);}
+#pinRival{top:0; z-index:2;}
+#pinMe{top:var(--pin-me-top); z-index:3;}
+.pin .name{display:flex; align-items:center; gap:4px; margin-bottom:4px; white-space:nowrap;
+  font:700 11px/1.2 var(--font); color:var(--rival-ink);}
+.pin .you{font:700 11px/1.2 var(--font); color:var(--teal-700); margin-top:4px; white-space:nowrap;}
+.locked #pinMe .you{color:var(--teal-300);}
+.av{position:relative; width:var(--av); height:var(--av); border-radius:var(--r-pill);
+  padding:2.5px; overflow:hidden;}
+.av svg{width:100%; height:100%; border-radius:var(--r-pill); display:block;}
+#pinRival .av{background:var(--rival-ink);}
+#pinMe .av{background:var(--teal-700);}
+.locked #pinMe .av{background:var(--teal-300);}
+.nib{width:0; height:0; border-left:9px solid transparent; border-right:9px solid transparent;}
+#pinRival .nib{border-top:10px solid var(--rival-ink); margin-top:-1px;}   /* points down */
+#pinMe .nib{border-bottom:10px solid var(--teal-700); margin-bottom:-1px;} /* points up */
+.locked #pinMe .nib{border-bottom-color:var(--teal-300);}
+.crown{width:13px; height:13px;}
+/* mistake feedback on a pin: a one-shot shake as it lands, then a red X held
+   for as long as that player stays locked out.
+   The shake targets .av, NOT .pin — .pin carries translateX(-50%) for centring
+   and animating its transform would knock the pin sideways. */
+@keyframes srShake{
+  0%,100%{transform:translateX(0)}
+  15%{transform:translateX(-4px)} 30%{transform:translateX(4px)}
+  45%{transform:translateX(-3px)} 60%{transform:translateX(3px)}
+  75%{transform:translateX(-2px)} 90%{transform:translateX(2px)}}
+.pin.shake .av{animation:srShake 420ms ease-in-out 1;}
+.xmark{position:absolute; inset:0; display:none; border-radius:var(--r-pill);
+  background:rgba(229,65,65,.30);}
+.pin.penalty .xmark{display:block;}
+.xmark::before,.xmark::after{content:""; position:absolute; left:50%; top:14%;
+  width:3px; height:72%; margin-left:-1.5px; border-radius:2px;
+  background:var(--danger); box-shadow:0 0 0 1px rgba(255,255,255,.6);}
+.xmark::before{transform:rotate(45deg);}
+.xmark::after{transform:rotate(-45deg);}
+/* the pin is centred with translateX(-50%), so every keyframe must carry it —
+   otherwise the animation replaces the centring and the pin jumps sideways */
+@keyframes srAvPop{
+  0%{transform:translateX(-50%) scale(1)}
+  34%{transform:translateX(-50%) scale(1.22)}
+  100%{transform:translateX(-50%) scale(1)}}
+.pop{animation:srAvPop 420ms cubic-bezier(.2,1.4,.3,1) 1;}
+
+/* ---------- board ---------- */
+.boardwrap{position:relative; flex:none; align-self:center; margin-top:2px;}
+#board{width:var(--board); height:var(--board); display:grid;
+  grid-template-columns:repeat(9,1fr); grid-template-rows:repeat(9,1fr);
+  background:var(--card); border:2.48px solid var(--board-box); touch-action:none;}
+.cell{position:relative; display:flex; align-items:center; justify-content:center;
+  background:var(--card); font:400 calc(var(--cell) * .536)/1 var(--font); color:var(--num-solved);
+  border-right:1.24px solid var(--board-grid); border-bottom:1.24px solid var(--board-grid);
+  user-select:none; cursor:pointer;}
+.cell .dig{position:relative; z-index:1;}
+/* pencil marks — 3x3 of tiny digits, only drawn while the cell is empty */
+.cell .notes{position:absolute; inset:0; display:grid;
+  grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+  font:400 calc(var(--cell) * .26)/1 var(--font); color:rgba(10,10,10,.5);}
+.cell .notes b{display:flex; align-items:center; justify-content:center; font-weight:400;}
+.cell.br3{border-right:2.48px solid var(--board-box);}
+.cell.bb3{border-bottom:2.48px solid var(--board-box);}
+.cell.c8{border-right:none;}
+.cell.r8{border-bottom:none;}
+.cell.given{color:var(--num-base); cursor:default;}
+.cell.peer{background:var(--hl-soft);}               /* all 20 peers, soft */
+.cell.samenum{background:var(--hl-hard); color:var(--num-solved);}
+.cell.sel{background:var(--hl-hard);}                /* hard highlight, no ring */
+/* mistake — three beats over 620ms, never committed to the board */
+@keyframes srWrongBg{0%{background:var(--card)}8%{background:var(--danger-tint)}
+  46%{background:var(--danger-tint)}75%{background:#FDE7E7}100%{background:var(--card)}}
+@keyframes srWrong{0%{opacity:0;transform:scale(.82)}10%{opacity:1;transform:scale(1)}
+  46%{opacity:1;transform:scale(1)}62%{opacity:.22}100%{opacity:0;transform:scale(.94)}}
+.cell.wrong{animation:srWrongBg 620ms ease-out 1 both; color:var(--num-error) !important;}
+.cell.wrong .dig{display:block; animation:srWrong 620ms ease-out 1 both;}
+/* auto-complete: each digit pops in as it lands */
+@keyframes srAutoFill{0%{opacity:0; transform:scale(.45)}
+  60%{opacity:1; transform:scale(1.10)}100%{opacity:1; transform:scale(1)}}
+.cell.autofill .dig{display:block; animation:srAutoFill 260ms ease-out 1 both;}
+
+/* ---------- lockout: ONE blur blocker, radial falloff (tuned via debug) ---------- */
+#lockout{position:absolute; inset:0; display:none; pointer-events:none; z-index:5;}
+#lockout.on{display:block; pointer-events:auto;
+  -webkit-backdrop-filter:blur(var(--blur)); backdrop-filter:blur(var(--blur));
+  background:radial-gradient(ellipse 88% 88% at 50% 50%,
+    rgba(237,237,237,.58) 0%, rgba(237,237,237,.34) 55%, rgba(237,237,237,.14) 100%);}
+/* countdown ring — no text. Starts as a complete circle and sweeps away to
+   nothing over the lockout duration (a loading spinner run in reverse). */
+.lockbadge{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:6;
+  display:flex; align-items:center; justify-content:center;}
+.lockring{width:76px; height:76px; transform:rotate(-90deg);   /* drain starts at 12 o'clock */
+  filter:drop-shadow(0 1px 3px rgba(10,10,10,.28));}
+.lockring circle{fill:none; stroke:var(--lock-ring); stroke-width:6; stroke-linecap:round;}
+
+/* ---------- number pad ---------- */
+.pad{display:flex; gap:4px; justify-content:space-between; flex:none;
+  padding-top:var(--pad-top); width:var(--board); align-self:center;}
+.num{flex:1; height:var(--pad-h); border:none; padding:0; border-radius:var(--r-sm);
+  font:700 25px/1 var(--font); background:var(--hl-hard); color:var(--teal-700);
+  box-shadow:var(--pad-lip); cursor:pointer;}
+.num:active{transform:translateY(4px); box-shadow:none;}
+.num.done,.num[disabled]{background:var(--press); color:var(--fg-5); box-shadow:none;
+  pointer-events:none; transform:none;}
+
+/* ---------- action row (prototype controls, design's icon+label idiom) ---------- */
+.actions{display:flex; justify-content:space-around; padding:var(--act-top) 12px 0; flex:none;}
+/* Auto complete sits in a slot whose height is always reserved (and counted in
+   --chrome), so showing or hiding the button never moves the board. */
+.autoslot{flex:none; height:var(--auto-h); margin-top:var(--auto-top);
+  display:flex; align-items:center; padding:0 12px;}
+.autobtn{height:var(--auto-h); padding:0; font-size:15px;}
+.act{display:flex; flex-direction:column; align-items:center; gap:5px; background:none;
+  border:none; padding:0; cursor:pointer;}
+.act .disc{position:relative; width:var(--disc); height:var(--disc); border-radius:var(--r-pill);
+  background:var(--press); color:var(--fg-5); display:flex; align-items:center;
+  justify-content:center; font:700 var(--disc-font)/1 var(--font);}
+.act .disc svg{width:calc(var(--disc) * .5); height:calc(var(--disc) * .5); fill:currentColor;}
+.act .cap{font:400 10px/1 var(--font); color:var(--fg-4);}
+.act.on .disc{background:var(--teal-700); color:#fff;}
+.act.on .cap{color:var(--teal-700); font-weight:700;}
+.act:active .disc{transform:scale(.94);}
+.act[disabled]{opacity:.4;}
+/* the OFF/ON pill above the Notes disc */
+.badge{position:absolute; top:-6px; left:50%; transform:translateX(-50%); height:15px;
+  padding:0 6px; border-radius:18px; background:var(--fg-5); color:#fff;
+  font:700 9px/15px var(--font); letter-spacing:.5px;}
+.act.on .badge{background:var(--teal-700);}
+
+/* short screens: tighten the fixed chrome so the board keeps as much room as
+   possible and the layout still fits without scrolling */
+@media (max-height:750px){
+  :root{
+    --av:34px; --rail-h:138px; --track-top:58px; --pin-me-top:75px;
+    --pad-h:46px; --pad-top:12px; --disc:40px; --act-top:14px; --disc-font:16px;
+    --auto-h:40px; --auto-top:8px;
+    --chrome:379px;
+  }
+}
+
+/* ---------- debug (contents unchanged) ----------
+   FIXED and outside .wrap, so opening it can never change --chrome/--board or
+   make the page itself scroll. Anything too tall scrolls inside the panel. */
+#debug{position:fixed; z-index:28; display:none;
+  left:50%; transform:translateX(-50%);
+  top:calc(8px + env(safe-area-inset-top));
+  width:min(360px, calc(100vw - 16px));
+  max-height:calc(100dvh - 16px); overflow-y:auto; overscroll-behavior:contain;
+  background:var(--card); border:1px solid var(--border-soft); border-radius:var(--r-lg);
+  padding:12px 14px 14px; font:400 12px/1.3 var(--font);
+  box-shadow:0 10px 30px rgba(10,10,10,.20);}
+#debug.on{display:block;}
+.dbghead{display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;
+  font:700 12px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
+  color:var(--teal-700);}
+.dbgclose{background:none; border:none; color:var(--fg-4); cursor:pointer;
+  font:400 22px/1 var(--font); padding:0 2px;}
+.drow{display:flex; align-items:center; gap:10px; margin:8px 0;}
+.drow label{width:148px; color:var(--fg-4);}
+.drow input[type=range]{flex:1; accent-color:var(--teal-700);}
+.drow .val{width:58px; text-align:right; color:var(--fg-1); font-variant-numeric:tabular-nums;}
+
+/* ---------- shared button styles (overlay + result card) ---------- */
+.btn{width:100%; border:none; border-radius:var(--r-md); padding:15px; cursor:pointer;
+  font:700 16px/1 var(--font);}
+.btn.primary{background:var(--teal-700); color:#fff; box-shadow:inset 0 -2px 0 0 var(--teal-900);}
+.btn.secondary{background:var(--hl-hard); color:var(--teal-700); box-shadow:inset 0 -2px 0 0 #5797A9;}
+.btn.ghost{background:none; color:var(--fg-4); font:400 13px/1 var(--font); padding:11px;
+  box-shadow:none;}
+.btn.danger{background:var(--danger); color:#fff; box-shadow:inset 0 -2px 0 0 var(--danger-dim);}
+.btn.dev{background:none; border:1px dashed var(--border); color:var(--fg-5);
+  font:400 12px/1 var(--font); padding:11px; box-shadow:none;}
+.btn:active{transform:translateY(2px);}
+.btn:disabled{background:var(--press); color:var(--fg-5); box-shadow:none; cursor:default;
+  transform:none;}
+.btn.ghost:disabled,.btn.dev:disabled{background:none;}
+
+/* ---------- start / lobby overlay ----------
+   Lives OUTSIDE .wrap so it can never affect the board's --board/--chrome
+   geometry. Fixed, own scroll, sits above both the board and #result. */
+.overlay{position:fixed; inset:0; z-index:30; display:none; background:var(--bg);
+  align-items:center; justify-content:center; overflow-y:auto;
+  padding:24px calc(20px + env(safe-area-inset-left)) calc(24px + env(safe-area-inset-bottom));}
+.overlay.on{display:flex;}
+.screen{display:none; width:100%; max-width:330px; flex-direction:column; gap:10px;
+  text-align:center;}
+.screen.on{display:flex;}
+.screen h1{margin:0; font:700 34px/1.05 var(--font); color:var(--fg-1); letter-spacing:-.6px;}
+.screen h2{margin:0; font:700 24px/1.1 var(--font); color:var(--fg-1);}
+.screen .sub{margin:0; font:400 13px/1.45 var(--font); color:var(--fg-4);}
+.screen .spacer{height:6px;}
+.field{display:flex; flex-direction:column; gap:6px; text-align:left; margin-top:4px;}
+.field > .lbl{font:700 11px/1 var(--font); letter-spacing:.04em; text-transform:uppercase;
+  color:var(--teal-700);}
+.field input,.code-in{width:100%; border:1px solid var(--border-soft); border-radius:var(--r-md);
+  background:var(--card); color:var(--fg-1); font:700 17px/1 var(--font); padding:14px; outline:none;}
+.field input:focus,.code-in:focus{border-color:var(--teal-700);}
+.err{font:400 11px/1.3 var(--font); color:var(--danger); min-height:14px; text-align:left;}
+.who{font:400 13px/1.3 var(--font); color:var(--fg-4);}
+.who b{color:var(--teal-700);}
+.who button{background:none; border:none; color:var(--teal-700); font:700 12px/1 var(--font);
+  text-decoration:underline; cursor:pointer; padding:0 0 0 6px;}
+/* segmented difficulty picker */
+.seg{display:flex; gap:6px;}
+.segbtn{flex:1; border:1px solid var(--border-soft); background:var(--card); color:var(--fg-4);
+  border-radius:var(--r-md); padding:12px 0; font:700 13px/1 var(--font); cursor:pointer;}
+.segbtn.on{background:var(--teal-700); border-color:var(--teal-700); color:#fff;
+  box-shadow:inset 0 -2px 0 0 var(--teal-900);}
+.segbtn:active{transform:translateY(1px);}
+.seghint{font:400 11px/1.3 var(--font); color:var(--fg-5); min-height:14px;}
+.or{display:flex; align-items:center; gap:10px; margin:4px 0; color:var(--fg-5);
+  font:400 11px/1 var(--font); text-transform:uppercase; letter-spacing:.06em;}
+.or::before,.or::after{content:""; flex:1; height:1px; background:var(--border-soft);}
+.joinrow{display:flex; gap:8px;}
+.joinrow .code-in{text-align:center; letter-spacing:.28em; text-transform:uppercase; font-size:20px;}
+.joinrow .btn{width:auto; flex:none; padding:15px 20px;}
+.codebox{background:var(--card); border:1px solid var(--border-soft); border-radius:var(--r-lg);
+  padding:18px; display:flex; flex-direction:column; gap:7px; align-items:center;}
+.codebox .lbl{font:700 11px/1 var(--font); letter-spacing:.06em; text-transform:uppercase;
+  color:var(--teal-700);}
+.codeval{font:700 40px/1 var(--font); letter-spacing:.16em; color:var(--fg-1);}
+.codebox .hint{font:400 11px/1.3 var(--font); color:var(--fg-4);}
+@keyframes srSpin{to{transform:rotate(360deg)}}
+.spinner{width:32px; height:32px; margin:8px auto; border-radius:50%;
+  border:3px solid var(--rail-bg); border-top-color:var(--teal-700);
+  animation:srSpin .9s linear infinite;}
+.cdnum{font:700 108px/1 var(--font); color:var(--teal-700); font-variant-numeric:tabular-nums;}
+@keyframes srCd{0%{transform:scale(.55);opacity:0}30%{transform:scale(1);opacity:1}
+  100%{transform:scale(1.05);opacity:.9}}
+.cdnum.tick{animation:srCd .95s ease-out 1 both;}
+.vsrow{display:flex; align-items:center; justify-content:center; gap:12px;
+  font:700 13px/1 var(--font); color:var(--fg-3);}
+.vsrow .vs{font:400 11px/1 var(--font); color:var(--fg-5); letter-spacing:.08em;}
+
+/* ---------- result + quit confirmation ---------- */
+#result,#confirm{position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background:rgba(10,10,10,.45); padding:20px;}
+#result{z-index:20;}
+#confirm{z-index:25;}                 /* above the board, below the start overlay */
+#result.on,#confirm.on{display:flex;}
+.card{background:var(--card); border-radius:var(--r-xl); padding:24px 20px; text-align:center;
+  max-width:330px; width:100%; max-height:calc(100dvh - 40px); overflow-y:auto;}
+.card h2{margin:0 0 4px; font:700 30px/1 var(--font); color:var(--fg-1);}
+.card h2.lose{color:var(--danger);}
+.card h2.win{color:var(--teal-700);}
+.card p{margin:0 0 14px; font:400 13px/1.4 var(--font); color:var(--fg-3);}
+.scoreboard{width:100%; margin:0 0 16px; border-top:1px solid var(--border-soft);}
+.scoreboard .hdr,.scoreboard .row{display:grid; grid-template-columns:1fr 72px 72px; gap:6px;
+  align-items:center; padding:8px 0; border-bottom:1px solid var(--border-soft);}
+.scoreboard .hdr{font:700 11px/1.25 var(--font); text-transform:uppercase; letter-spacing:.03em;}
+.scoreboard span:nth-child(2),.scoreboard span:nth-child(3){text-align:right;
+  font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis;}
+.scoreboard .hdr .me{color:var(--teal-700);}
+.scoreboard .hdr .op{color:var(--rival-ink);}
+.scoreboard .row{font:400 13px/1.2 var(--font); color:var(--fg-1);}
+.scoreboard .row span:first-child{text-align:left; color:var(--fg-4); font-size:12px;}
+.btnrow{display:flex; flex-direction:column; gap:8px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="wrap">
+
+  <header>
+    <div class="hgroup">
+      <button class="iconbtn" id="btnLeave" aria-label="Quit to main menu">
+        <svg viewBox="0 0 24 24"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20v-2z"/></svg>
+      </button>
+    </div>
+    <div class="hstack">
+      <span class="meta">RACE</span>
+      <span class="timer" id="clock">0:00</span>
+    </div>
+    <div class="hgroup right">
+      <!-- dev tuning: opens a fixed overlay, so it can never affect the board layout -->
+      <button class="iconbtn subtle" id="dbgToggle" aria-label="Debug panel">
+        <svg viewBox="0 0 24 24"><path d="M3 7h8v2H3V7zm10 0h8v2h-8V7zM3 15h5v2H3v-2zm7 0h11v2H10v-2zM9 5h2v6H9V5zm5 8h2v6h-2v-6z"/></svg>
+      </button>
+      <!-- placeholder — real settings screen not built yet -->
+      <button class="iconbtn" id="btnSettings" aria-label="Settings (not implemented)">
+        <svg viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm9.4 4c0-.5-.05-1-.13-1.5l2.1-1.6-2-3.5-2.5 1a8.6 8.6 0 0 0-2.6-1.5L16 2h-4l-.27 2.4a8.6 8.6 0 0 0-2.6 1.5l-2.5-1-2 3.5 2.1 1.6a9 9 0 0 0 0 3L4.6 15.6l2 3.5 2.5-1a8.6 8.6 0 0 0 2.6 1.5L12 22h4l.27-2.4a8.6 8.6 0 0 0 2.6-1.5l2.5 1 2-3.5-2.1-1.6c.08-.5.13-1 .13-1.5z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- one shared rail: rival grey behind, your teal in front, pins on opposite sides -->
+  <div class="rail">
+    <div class="track">
+      <div class="trackfill" id="railRival"></div>
+      <div class="trackfill" id="railMe"></div>
+    </div>
+    <div class="pin" id="pinRival">
+      <div class="name"><span id="rivalName">Rival</span>
+        <svg class="crown" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M2 8l4.2 3.2L12 4l5.8 7.2L22 8l-2 10H4L2 8z" fill="#FFB100"/>
+          <path d="M4 18h16l-.6 3H4.6L4 18z" fill="#FF8838"/>
+        </svg>
+      </div>
+      <div class="av" id="avRival"><span class="xmark" aria-hidden="true"></span></div>
+      <div class="nib"></div>
+    </div>
+    <div class="pin" id="pinMe">
+      <div class="nib"></div>
+      <div class="av" id="avMe"><span class="xmark" aria-hidden="true"></span></div>
+      <div class="you" id="myName">You</div>
+    </div>
+  </div>
+
+  <div class="boardwrap">
+    <div id="board"></div>
+    <div id="lockout"></div>
+    <div class="lockbadge" id="lockbadge" style="display:none">
+      <svg class="lockring" viewBox="0 0 64 64" aria-hidden="true">
+        <circle id="lockring" cx="32" cy="32" r="26"></circle>
+      </svg>
+    </div>
+  </div>
+
+  <div class="pad" id="pad"></div>
+
+  <div class="actions" id="actions">
+    <button class="act" id="btnUndo">
+      <span class="disc"><svg viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg></span>
+      <span class="cap">Undo</span>
+    </button>
+    <button class="act" id="btnErase">
+      <span class="disc"><svg viewBox="0 0 24 24"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17c-.78-.79-.78-2.05 0-2.84l10.6-10.6c.79-.78 2.05-.78 2.83 0zM4.22 15.58l3.54 3.53c.78.79 2.04.79 2.83 0l3.53-3.53-4.95-4.95-4.95 4.95z"/></svg></span>
+      <span class="cap">Erase</span>
+    </button>
+    <button class="act" id="btnNotes">
+      <span class="disc"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span class="badge" id="notesBadge">OFF</span></span>
+      <span class="cap">Notes</span>
+    </button>
+  </div>
+
+  <!-- Auto complete lives in its own always-reserved slot below the action row,
+       so it can appear and disappear without moving anything above it. -->
+  <div class="autoslot">
+    <button class="btn secondary autobtn" id="btnAutoComplete" hidden>Auto complete</button>
+  </div>
+
+</div>
+
+<!-- ================= DEBUG PANEL (fixed, outside .wrap) ================= -->
+<div id="debug">
+    <div class="dbghead"><span>Debug panel</span>
+      <button class="dbgclose" id="dbgClose" aria-label="Close debug panel">&times;</button>
+    </div>
+    <div class="drow"><label>Lockout duration (ms)</label><input type="range" id="d_lockout" min="500" max="10000" step="250" value="5000"><span class="val" id="v_lockout">5000</span></div>
+    <div class="drow"><label>Blur amount (px)</label><input type="range" id="d_blur" min="0" max="20" step="1" value="8"><span class="val" id="v_blur">8</span></div>
+    <div class="drow"><label>Overlay coverage</label><input type="range" id="d_cov" min="0" max="1" step="0.05" value="0.75"><span class="val" id="v_cov">0.75</span></div>
+    <div class="drow"><label>Ghost sec / cell</label><input type="range" id="d_spc" min="1" max="20" step="0.5" value="6"><span class="val" id="v_spc">6</span></div>
+    <div class="drow"><label>Ghost mistake rate</label><input type="range" id="d_mist" min="0" max="0.2" step="0.005" value="0.01"><span class="val" id="v_mist">0.010</span></div>
+    <div class="drow"><label>Ghost burst min</label><input type="range" id="d_bmin" min="1" max="10" step="1" value="2"><span class="val" id="v_bmin">2</span></div>
+    <div class="drow"><label>Ghost burst max</label><input type="range" id="d_bmax" min="1" max="10" step="1" value="5"><span class="val" id="v_bmax">5</span></div>
+    <div class="drow"><label>Lead clamp (pp)</label><input type="range" id="d_clamp" min="0" max="50" step="1" value="12"><span class="val" id="v_clamp">12</span></div>
+    <div class="drow"><label>Honest window</label><input type="range" id="d_honest" min="0.5" max="1" step="0.01" value="0.9"><span class="val" id="v_honest">0.90</span></div>
+</div>
+
+<!-- ======================= START / LOBBY OVERLAY ======================= -->
+<div class="overlay" id="overlay">
+
+  <!-- ---------- HOME ---------- -->
+  <section class="screen" data-screen="home">
+    <h1>Sudoku Race</h1>
+    <p class="sub">Same board, two players. First to fill it wins.</p>
+    <div class="field">
+      <span class="lbl">Your name</span>
+      <input id="nameInput" type="text" maxlength="14" inputmode="text"
+             autocomplete="nickname" spellcheck="false" placeholder="2–14 characters">
+      <span class="err" id="nameErr"></span>
+    </div>
+    <button class="btn primary" id="btnMp" disabled>Multiplayer</button>
+    <button class="btn secondary" id="btnSolo" disabled>Single Player</button>
+  </section>
+
+  <!-- ---------- MULTIPLAYER: create or join ---------- -->
+  <section class="screen" data-screen="mp">
+    <h2>Multiplayer</h2>
+    <p class="who">Playing as <b id="mpWho">—</b><button data-goto="home">Change</button></p>
+    <div class="field">
+      <span class="lbl">Difficulty</span>
+      <div class="seg" id="diffSeg">
+        <button class="segbtn on" data-diff="easy">Easy</button>
+        <button class="segbtn" data-diff="medium">Medium</button>
+        <button class="segbtn" data-diff="hard">Hard</button>
+      </div>
+      <span class="seghint" id="diffHint"></span>
+    </div>
+    <button class="btn primary" id="btnCreate">Create Match</button>
+    <div class="or">or join</div>
+    <div class="joinrow">
+      <input id="codeInput" class="code-in" maxlength="4" placeholder="CODE"
+             inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      <button class="btn primary" id="btnJoin" disabled>Join</button>
+    </div>
+    <span class="err" id="codeErr"></span>
+    <button class="btn ghost" data-goto="home">Back</button>
+  </section>
+
+  <!-- ---------- WAITING FOR OPPONENT ---------- -->
+  <section class="screen" data-screen="waiting">
+    <h2 id="waitTitle">Waiting for opponent…</h2>
+    <div class="codebox">
+      <span class="lbl" id="codeBoxLbl">Room code</span>
+      <span class="codeval" id="codeVal">————</span>
+      <span class="hint" id="codeBoxHint">Share this code with your opponent</span>
+    </div>
+    <div class="spinner"></div>
+    <p class="sub" id="waitNote">Not connected — no server yet.</p>
+    <button class="btn ghost" id="btnCancelWait">Cancel</button>
+  </section>
+
+  <!-- ---------- 3-2-1 COUNTDOWN ---------- -->
+  <section class="screen" data-screen="countdown">
+    <div class="vsrow"><span id="cdMe">You</span><span class="vs">VS</span><span id="cdOp">Rival</span></div>
+    <div class="cdnum" id="cdNum">3</div>
+    <p class="sub">Get ready…</p>
+  </section>
+
+</div>
+
+<!-- ======================= QUIT CONFIRMATION ======================= -->
+<div id="confirm">
+  <div class="card">
+    <h2 class="lose">Quit the match?</h2>
+    <p>You will lose the match if you leave now.</p>
+    <div class="btnrow">
+      <button class="btn primary" id="btnQuitStay">Keep playing</button>
+      <button class="btn danger" id="btnQuitYes">Quit to menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ======================= RESULTS ======================= -->
+<div id="result">
+  <div class="card">
+    <h2 id="resTitle">You win!</h2>
+    <p id="resSub"></p>
+    <div class="scoreboard">
+      <div class="hdr"><span></span><span class="me" id="sbMe">You</span><span class="op" id="sbOp">Rival</span></div>
+      <div class="row"><span>Finish time</span><span id="sbTimeMe">—</span><span id="sbTimeOp">—</span></div>
+      <div class="row"><span>Mistakes</span><span id="sbMisMe">0</span><span id="sbMisOp">0</span></div>
+      <div class="row"><span>Lockouts</span><span id="sbLockMe">0</span><span id="sbLockOp">0</span></div>
+      <div class="row"><span>Locked total</span><span id="sbLmsMe">0s</span><span id="sbLmsOp">0s</span></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn primary" id="btnRematchSame">Rematch · same board</button>
+      <button class="btn secondary" id="btnRematchNew">Rematch · new board</button>
+      <button class="btn ghost" id="btnHome">Back to start</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   BOARD POOLS — 81-char strings, '0' = empty cell.
+   The solver below derives the solution, so you only need to supply valid,
+   uniquely-solvable puzzles. Add entries to any pool freely (5–10 each is the
+   target); rotation and the difficulty picker adapt to the length automatically.
+   Current placeholders: easy 33 blanks, medium 44, hard 52 — all verified to
+   have exactly one solution.
+   ============================================================ */
+const BOARDS = {
+  // all verified: 81 digits, no conflicting givens, exactly one solution each
+  easy: [
+    "001607849700500032600803170080002000006400080927000064004980000159370008073001900",
+    "600009400018005090379024000094051720500206008000908000000410800002003067083500001",
+    "070063800000000403004978102027800030040001020061027004280006519050002000400509200",
+    "800900705476030208209400000500860001600504007040010006085040630902678500064050000",
+    "005019000000830005831004902059080001708305200040921000580006009103008056600040017",
+    "006300008001000305273090410100020900920000060007054200400080000030709102750001830",
+    "027000000105804700690010250000500003569270040470001620700109400006402507002008006",
+    "090300206000002809020961030809520701600017308100000504015070003706850000000136975",
+    "024917060750043080060000007907208000500060038000190020605000040030409051000586070",
+    "500000087782035006609207010856090040307504800004060001268000000000078005005612000"
+  ],
+  medium: [
+    "000604079000800561063100000280090000675003000000706000006007098800360400050910000",
+    "060000007000018060000000402005600704040000020030042001600750290580000370027860040",
+    "090000070705489020400700069000002700016000000074531082057304000832956000000108005",
+    "007000060506080010300726800730000009010000008800405120000540000903060050150079080",
+    "607100032950002006030650904000516490060900780419000005004000000000390000800000600",
+    "620000048000005000000620501090560400002100000000432000037080020068003004050740309",
+    "537020400400037006000000730800092300073580004050400800000809103390000607004060008",
+    "760008012000001000100006570807060200003005701400002608070640800948057163056800407",
+    "020607000030452089740019206003006478604000302000000001000080024000003097280904010",
+    "502080071007600084860007320390006010600000239400000060700029806000030002000560700"
+  ],
+  hard: [
+    "900200080003040020005036090050074003100000508040000000300000002000002000090001600",
+    "007003090002005001004000006408000900100690005000032000800000050000006000009370400",
+    "000060047020009300080340000500000130607000005802600000200000090000400000009070002",
+    "070040100800900206020000000500000004400097502000000630090700000630500000040600910",
+    "021803600050000009006090000000020800000987030000004060800150000009438076060000000",
+    "008026040060000700013008020000982000000000000040075009200000180000040000100000435",
+    "030090071009007000506004300200000000000836700040000096000920008000040010000060407",
+    "000300080007000000000046052000139200003800600200060003000010800150090000420000061",
+    "060000000403072006029500087000100020002000000000008341790000500005010070000795604",
+    "000000074002000950070400000830007006014500000000080000090016000000070530007020001"
+  ]
+};
+/* ---------- multiplayer server ----------
+   Point this at your room server. Leave it as-is for local testing (run
+   `py -3 server.py` on the same machine); set it to your wss:// host once
+   deployed. If the page is served over https the URL must be wss://, or the
+   browser will block the connection as mixed content. */
+const SERVER_URL = (location.hostname==='localhost' || location.hostname==='127.0.0.1' || location.protocol==='file:')
+  ? 'ws://127.0.0.1:8787'
+  : 'wss://REPLACE-WITH-YOUR-SERVER';
+
+const DIFFICULTIES = ['easy','medium','hard'];
+const DIFF_LABEL = { easy:'Easy', medium:'Medium', hard:'Hard' };
+
+/* ---------- board rotation ----------
+   A shuffled bag per difficulty: every board in a pool is played once before
+   any repeats, and a reshuffle never starts with the board just played, so you
+   never get the same board twice running. */
+const bags = {}, lastPlayed = {};
+function nextBoardIndex(diff){
+  const pool = BOARDS[diff] || [];
+  if(pool.length===0) return 0;
+  if(!bags[diff] || bags[diff].length===0){
+    const order = pool.map((_,i)=>i);
+    for(let i=order.length-1;i>0;i--){
+      const j=Math.floor(Math.random()*(i+1));
+      [order[i],order[j]]=[order[j],order[i]];
+    }
+    if(order.length>1 && order[0]===lastPlayed[diff]){
+      [order[0],order[1]]=[order[1],order[0]];      // avoid an immediate repeat
+    }
+    bags[diff]=order;
+  }
+  const idx = bags[diff].shift();
+  lastPlayed[diff]=idx;
+  return idx;
+}
+
+/* ---------- identities ----------
+   opponentName is a variable, not a constant: in solo it's the ghost, in
+   multiplayer it will be whatever name the remote player sends. */
+const GHOST_NAME = "Nikola R.";        // the simulated ghost's display name
+const MP_OPPONENT_PLACEHOLDER = "Opponent";
+let playerName   = "You";
+let opponentName = GHOST_NAME;
+
+/* ---------- session / lobby state (separate from per-board state S) ---------- */
+const game = {
+  mode: 'solo',          // 'solo' | 'mp'
+  difficulty: 'easy',    // easy is the default selection
+  boardIndex: 0,
+  roomCode: null,
+  isHost: false
+};
+
+/* ---------- Sudoku solver (backtracking) ---------- */
+function solve(puzStr){
+  const g = puzStr.split('').map(Number);
+  function ok(pos,v){
+    const r=(pos/9)|0, c=pos%9;
+    for(let i=0;i<9;i++){ if(g[r*9+i]===v) return false; if(g[i*9+c]===v) return false; }
+    const br=((r/3)|0)*3, bc=((c/3)|0)*3;
+    for(let dr=0;dr<3;dr++) for(let dc=0;dc<3;dc++) if(g[(br+dr)*9+(bc+dc)]===v) return false;
+    return true;
+  }
+  function bt(){
+    let pos=-1;
+    for(let i=0;i<81;i++){ if(g[i]===0){ pos=i; break; } }
+    if(pos===-1) return true;
+    for(let v=1;v<=9;v++){ if(ok(pos,v)){ g[pos]=v; if(bt()) return true; g[pos]=0; } }
+    return false;
+  }
+  bt();
+  return g;
+}
+
+/* ---------- config (driven by debug sliders) ---------- */
+const cfg = {
+  lockoutMs:5000, blur:8, coverage:0.75,
+  ghostSpc:6, ghostMistake:0.01, burstMin:2, burstMax:5,
+  leadClamp:12, honest:0.9
+};
+
+/* ---------- state ---------- */
+let S = null;
+const $ = id => document.getElementById(id);
+const boardEl=$('board'), lockEl=$('lockout'), badgeEl=$('lockbadge'), padEl=$('pad'),
+      wrapEl=$('wrap'), trackEl=document.querySelector('.track');
+
+/* avatars — inline SVG so the file stays self-contained (no external images) */
+function avatarSVG(skin,hair,shirt){
+  return '<svg viewBox="0 0 48 48" aria-hidden="true">'
+    + '<rect width="48" height="48" rx="24" fill="#EFEAE4"/>'
+    + '<path d="M8 48c0-9.4 7.2-15 16-15s16 5.6 16 15z" fill="'+shirt+'"/>'
+    + '<circle cx="24" cy="20" r="10" fill="'+skin+'"/>'
+    + '<path d="M14 18a10 10 0 0 1 20 0c0-7-4-10-10-10s-10 3-10 10z" fill="'+hair+'"/>'
+    + '</svg>';
+}
+/* insert before the .xmark overlay rather than replacing it */
+$('avRival').insertAdjacentHTML('afterbegin', avatarSVG('#E8B78F','#4A3B33','#6E7A88'));
+$('avMe').insertAdjacentHTML('afterbegin', avatarSVG('#F0C7A2','#2E3A46','#1E6E8C'));
+
+/* countdown ring geometry — r=26 in the SVG's 64×64 user space */
+const RING_C = 2 * Math.PI * 26;
+$('lockring').style.strokeDasharray = RING_C.toFixed(2);
+
+/* build number pad once */
+for(let n=1;n<=9;n++){
+  const b=document.createElement('button');
+  b.className='num'; b.textContent=n; b.dataset.n=n;
+  b.addEventListener('click',()=>input(n));
+  padEl.appendChild(b);
+}
+
+/* ---------- board setup vs race start ----------
+   setupBoard() builds and paints the board but leaves the clock stopped, so a
+   countdown can sit in front of a fully-rendered grid. startRace() is what
+   actually begins the race. */
+function activePool(){ return BOARDS[game.difficulty] || BOARDS.easy; }
+
+/* setupBoard(index) draws from the pool of the currently selected difficulty.
+   Pass no index to take the next board from the rotation. */
+function setupBoard(boardIndex){
+  stopAuto();                 // never let a running autofill bleed into a new board
+  showAutoComplete(false);
+  const pool = activePool();
+  if(boardIndex===undefined || boardIndex<0 || boardIndex>=pool.length){
+    boardIndex = nextBoardIndex(game.difficulty);
+  }
+  const puzzle = pool[boardIndex];
+  const solution = solve(puzzle);
+  const grid = puzzle.split('').map(Number);
+  const totalEmpty = grid.filter(x=>x===0).length;
+  S = {
+    boardIndex, puzzle, solution, grid, totalEmpty,
+    sel:-1, lockUntil:0, lockStart:0, over:false,
+    // race lifecycle — the clock does not run until startRace()
+    started:false, startTime:0, finished:false, myEndTime:0,
+    decided:false, autoFilling:false,   // decided = someone finished; board may still be live
+    notes:Array.from({length:81},()=>new Set()), notesOn:false, history:[],
+    // my counters (results screen + analytics later)
+    mistakes:0, lockouts:0, totalLockoutMs:0,
+    // ghost
+    ghostFilled:0, ghostNext:0, ghostBurst:randInt(cfg.burstMin,cfg.burstMax),
+    ghostLockUntil:0, ghostShownAt:-1, myShownAt:-1, myLockSeen:0,
+    // ghost counters, derived in loop() by watching ghostLockUntil so that
+    // stepGhost() itself stays untouched
+    ghostLockSeen:0, ghostMistakes:0, ghostLockouts:0, ghostTotalLockoutMs:0,
+    ghostFinished:false, ghostEndTime:0,
+    // displayed opponent progress
+    opMilestone:0, opDisplay:0
+  };
+  game.boardIndex = boardIndex;
+  renderBoard();
+  updatePad();
+  hideResult();
+  endLockout();
+  clearPenalties();
+  syncNames();
+  syncControls();
+  $('clock').textContent='0:00';
+  loop();
+}
+
+function startRace(){
+  const now = performance.now();
+  S.started  = true;
+  S.startTime = now;
+  S.ghostNext = now + 1200;      // the same 1.2s grace the ghost always had
+  updatePad();
+}
+
+function randInt(a,b){
+  const lo=Math.min(a,b), hi=Math.max(a,b);      // clamp both before using either
+  return lo+Math.floor(Math.random()*(hi-lo+1));
+}
+
+/* ---------- rendering ---------- */
+function renderBoard(){
+  boardEl.innerHTML='';
+  for(let i=0;i<81;i++){
+    const r=(i/9)|0, c=i%9;
+    const cell=document.createElement('div');
+    cell.className='cell';
+    if(c%3===2) cell.classList.add('br3');
+    if(r%3===2) cell.classList.add('bb3');
+    if(c===8) cell.classList.add('c8');
+    if(r===8) cell.classList.add('r8');
+    const given = S.puzzle[i]!=='0';
+    if(given) cell.classList.add('given');
+    cell.innerHTML = '<span class="dig"></span><div class="notes" hidden>'
+      + '<b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b><b></b></div>';
+    cell.dataset.i=i;
+    cell.addEventListener('click',()=>select(i));
+    boardEl.appendChild(cell);
+    renderCell(i);
+  }
+  paintSelection();
+}
+
+function cellAt(i){ return boardEl.children[i]; }
+function setDigit(i,txt){ cellAt(i).querySelector('.dig').textContent=txt; }
+
+/* paints one cell's digit and pencil marks from state */
+function renderCell(i){
+  const el=cellAt(i);
+  const dig=el.querySelector('.dig'), nt=el.querySelector('.notes');
+  const v=S.grid[i];
+  dig.textContent = v!==0 ? v : '';
+  const set = S.notes[i];
+  const showNotes = v===0 && S.puzzle[i]==='0' && set && set.size>0;
+  nt.hidden = !showNotes;
+  if(showNotes) for(let n=1;n<=9;n++) nt.children[n-1].textContent = set.has(n) ? n : '';
+}
+
+function syncNames(){
+  $('rivalName').textContent = opponentName;
+  $('myName').textContent    = playerName;
+}
+
+function paintSelection(){
+  const sel=S.sel;
+  const selVal = sel>=0 ? S.grid[sel] : 0;
+  for(let i=0;i<81;i++){
+    const el=cellAt(i);
+    el.classList.remove('sel','peer','samenum');
+    if(sel<0) continue;
+    const r=(i/9)|0,c=i%9, sr=(sel/9)|0,sc=sel%9;
+    const sameBox = ((r/3)|0)===((sr/3)|0) && ((c/3)|0)===((sc/3)|0);
+    if(i===sel){ el.classList.add('sel'); }
+    else if(r===sr||c===sc||sameBox){ el.classList.add('peer'); }
+    if(selVal!==0 && S.grid[i]===selVal && i!==sel){ el.classList.add('samenum'); }
+  }
+}
+
+function select(i){
+  if(S.over) return;
+  S.sel=i;
+  paintSelection();
+}
+
+function editable(i){ return S.puzzle[i]==='0' && S.grid[i]===0; }
+
+function input(n){
+  if(!S || S.over || !S.started || S.autoFilling) return;   // not before the countdown, not mid-autofill
+  if(performance.now() < S.lockUntil) return;            // locked out
+  const i=S.sel;
+  if(i<0 || !editable(i)) return;
+
+  // notes mode: pencil marks are free — no mistake check, no lockout
+  if(S.notesOn){
+    const set=S.notes[i];
+    const added=!set.has(n);
+    if(added) set.add(n); else set.delete(n);
+    S.history.push({t:'note', i, n, added});
+    renderCell(i);
+    return;
+  }
+
+  if(S.solution[i]===n){
+    // correct — lock it in, and clear that cell's pencil marks
+    const prevNotes=[...S.notes[i]];
+    S.grid[i]=n;
+    S.notes[i]=new Set();
+    S.history.push({t:'place', i, notes:prevNotes});
+    renderCell(i);
+    paintSelection();
+    updatePad();
+    netProgress();          // only a count leaves this device, never the solution
+    checkWin();
+  } else {
+    // strict mistake: flash red on a red tint, never commit, then lock out
+    S.mistakes++;
+    const el=cellAt(i);
+    el.querySelector('.notes').hidden=true;      // don't draw marks under the flash
+    setDigit(i,n); el.classList.add('wrong');
+    setTimeout(()=>{ el.classList.remove('wrong'); renderCell(i); }, 620);
+    startLockout();
+    // mirror the penalty so their pin shakes and wears the X for the same time
+    if(game.mode==='mp') net.send({t:'lockout', ms:cfg.lockoutMs});
+  }
+}
+
+/* how many cells I've filled — the only gameplay fact sent to the opponent */
+function myFilled(){
+  return S ? S.grid.filter((v,i)=>S.puzzle[i]==='0' && v!==0).length : 0;
+}
+function netProgress(){
+  if(game.mode==='mp') net.send({t:'progress', filled:myFilled()});
+}
+
+/* ---------- Undo / Erase / Notes ---------- */
+function controlsBlocked(){
+  return !S || S.over || !S.started || S.autoFilling || performance.now() < S.lockUntil;
+}
+function undo(){
+  if(controlsBlocked()) return;
+  const a=S.history.pop();
+  if(!a) return;
+  if(a.t==='place'){ S.grid[a.i]=0; S.notes[a.i]=new Set(a.notes); }
+  else if(a.t==='note'){ const s=S.notes[a.i]; if(a.added) s.delete(a.n); else s.add(a.n); }
+  else if(a.t==='erase'){ S.grid[a.i]=a.digit; S.notes[a.i]=new Set(a.notes); }
+  renderCell(a.i); paintSelection(); updatePad(); syncControls(); netProgress();
+}
+function erase(){
+  if(controlsBlocked()) return;
+  const i=S.sel;
+  if(i<0 || S.puzzle[i]!=='0') return;              // givens are never erasable
+  const digit=S.grid[i], notes=[...S.notes[i]];
+  if(digit===0 && notes.length===0) return;
+  S.history.push({t:'erase', i, digit, notes});
+  S.grid[i]=0; S.notes[i]=new Set();
+  renderCell(i); paintSelection(); updatePad(); syncControls(); netProgress();
+}
+function toggleNotes(){
+  if(controlsBlocked()) return;
+  S.notesOn=!S.notesOn;
+  syncControls();
+}
+function syncControls(){
+  const locked = !!S && performance.now() < S.lockUntil;
+  $('btnNotes').classList.toggle('on', !!(S && S.notesOn));
+  $('notesBadge').textContent = (S && S.notesOn) ? 'ON' : 'OFF';
+  $('btnUndo').disabled  = !S || locked || S.history.length===0;
+  $('btnErase').disabled = !S || locked;
+  $('btnNotes').disabled = !S || locked;
+}
+$('btnUndo').addEventListener('click', undo);
+$('btnErase').addEventListener('click', erase);
+$('btnNotes').addEventListener('click', toggleNotes);
+
+/* ---------- lockout overlay ---------- */
+function applyLockoutMask(){
+  // Radial mask over the single blur blocker. Alpha 1 = full blur strength,
+  // lower alpha lets the sharp grid bleed through = weaker blur.
+  // Centre is strongest; edges keep `edgeAlpha` so blur is still present there.
+  // `coverage` sets how large the full-strength core is.
+  const edgeAlpha = 0.58;                          // blur still present toward the corners
+  const strong = Math.round(10 + cfg.coverage*45); // full-strength core radius: 10%..55%
+  const mid    = Math.min(94, strong + 26);
+  const g = 'radial-gradient(ellipse 94% 94% at 50% 50%,'
+          + ' rgba(0,0,0,1) 0%,'
+          + ' rgba(0,0,0,1) '+strong+'%,'
+          + ' rgba(0,0,0,0.82) '+mid+'%,'
+          + ' rgba(0,0,0,'+edgeAlpha+') 100%)';
+  lockEl.style.webkitMaskImage=g;
+  lockEl.style.maskImage=g;
+}
+function startLockout(){
+  document.documentElement.style.setProperty('--blur', cfg.blur+'px');
+  applyLockoutMask();
+  const now=performance.now();
+  S.lockStart = now;
+  S.lockUntil = now + cfg.lockoutMs;
+  S.lockouts++;                            // counters for the results screen
+  S.totalLockoutMs += cfg.lockoutMs;
+  lockEl.classList.add('on');
+  badgeEl.style.display='flex';
+  wrapEl.classList.add('locked');
+  $('lockring').style.strokeDashoffset='0';    // start as a complete circle
+  updatePad();                    // dead pad carries the penalty alongside the red border
+}
+function endLockout(){
+  lockEl.classList.remove('on');
+  badgeEl.style.display='none';
+  wrapEl.classList.remove('locked');
+}
+
+/* ---------- number pad state ---------- */
+function updatePad(){
+  const counts=Array(10).fill(0);
+  for(let i=0;i<81;i++) if(S.grid[i]!==0) counts[S.grid[i]]++;
+  const locked = performance.now() < S.lockUntil;
+  padEl.querySelectorAll('.num').forEach(b=>{
+    const n=+b.dataset.n;
+    b.classList.toggle('done', counts[n]>=9);
+    b.disabled = locked;
+  });
+  syncControls();      // called on lockout start and expiry, so it stays in step
+}
+
+/* ---------- ghost opponent ---------- */
+function stepGhost(now){
+  if(S.ghostFilled>=S.totalEmpty) return;
+  if(now < S.ghostLockUntil) return;
+  if(now < S.ghostNext) return;
+  // resolve one ghost action
+  if(Math.random() < cfg.ghostMistake){
+    // ghost makes a mistake -> ghost eats a lockout, no progress
+    S.ghostLockUntil = now + cfg.lockoutMs;
+    S.ghostNext = S.ghostLockUntil + cfg.ghostSpc*1000*(0.3+Math.random()*0.4);
+    return;
+  }
+  S.ghostFilled++;
+  S.ghostBurst--;
+  if(S.ghostBurst<=0){
+    S.ghostBurst = randInt(cfg.burstMin,cfg.burstMax);
+    S.ghostNext = now + cfg.ghostSpc*1000*(1.5+Math.random()*1.5);   // pause between bursts
+  } else {
+    S.ghostNext = now + cfg.ghostSpc*1000*(0.3+Math.random()*0.4);   // quick within burst
+  }
+}
+
+/* ---------- opponent DISPLAYED progress (the deceptive bar) ---------- */
+function opponentDisplay(myProg){
+  const ghostProg = S.ghostFilled/S.totalEmpty;
+  // honest window: once either side passes threshold, show ghost's TRUE progress
+  if(ghostProg>=cfg.honest || myProg>=cfg.honest){
+    return ghostProg;
+  }
+  // otherwise only advance the shown value at 25/50/75/90 milestones
+  const milestones=[0.25,0.50,0.75,0.90];
+  let m=S.opMilestone;
+  for(const ms of milestones){ if(ghostProg>=ms && ms>m) m=ms; }
+  S.opMilestone=m;
+  // never show opponent more than leadClamp percentage-points ahead of my TRUE progress
+  const capped = Math.min(m, myProg + cfg.leadClamp/100);
+  return Math.max(0, capped);
+}
+
+/* ---------- rail notches ----------
+   Both rails advance in whole notches of NOTCH solved cells, so neither side
+   creeps forward on every single digit. Partial progress inside a notch is
+   never drawn. If the tail of the board is shorter than a notch, the bar holds
+   still and snaps to the very end on the final cell. */
+const NOTCH = 3;
+function notchFrac(filled, totalEmpty){
+  if(totalEmpty<=0) return 0;
+  if(filled>=totalEmpty) return 1;                       // last move -> the end
+  const n = Math.max(1, Math.ceil(totalEmpty / NOTCH));  // notches to a full board
+  return Math.min(n, Math.floor(filled / NOTCH)) / n;
+}
+
+/* pin placement — the track is inset by half a pin, so a pin may travel the
+   full 0..100% of it without overhanging. Pins are positioned against .rail,
+   hence the track's own left offset. Returns the position ALONG THE TRACK so
+   the fill can end exactly under the pin. */
+function placePin(el,frac){
+  const W = trackEl.clientWidth || 369;
+  const L = trackEl.offsetLeft || 0;
+  const x = Math.max(0, Math.min(1, frac)) * W;
+  el.style.left = (L + x).toFixed(1)+'px';
+  return x;
+}
+
+/* ---------- mistake feedback on the pins ----------
+   Both sides are driven purely off their own lockout deadline, so the X lasts
+   exactly as long as the lockout (and follows the debug slider) and nothing
+   needs to be scheduled or cleaned up. */
+function shakePin(el){ el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+function clearPenalties(){
+  ['pinMe','pinRival'].forEach(id=>$(id).classList.remove('penalty','shake'));
+}
+function paintPenalties(now){
+  // Compare lockSTART, not the deadline: the deadline is reset to 0 on expiry and
+  // can also move backwards if the duration slider is lowered, either of which
+  // breaks a "did it increase?" test. lockStart only ever moves forward.
+  if(S.lockStart > S.myLockSeen){ S.myLockSeen = S.lockStart; shakePin($('pinMe')); }
+  $('pinMe').classList.toggle('penalty', now < S.lockUntil);
+  // in mp, S.ghostLockUntil is set from the opponent's relayed lockout
+  $('pinRival').classList.toggle('penalty', now < S.ghostLockUntil);
+}
+
+/* ---------- draw the rail ----------
+   Called every frame from loop(), and once more from playerFinished() so the winning
+   move is actually painted before the loop stops. */
+function paintRail(){
+  const myFilled = S.grid.filter((v,i)=>S.puzzle[i]==='0' && v!==0).length;
+  const myProg = myFilled/S.totalEmpty;              // TRUE progress
+  const opProg = opponentDisplay(myProg);            // deceptive value, as tuned
+  // quantise BOTH to notches for drawing only — the values above stay exact
+  const myShown = notchFrac(myFilled, S.totalEmpty);
+  const opShown = notchFrac(Math.round(opProg*S.totalEmpty), S.totalEmpty);
+  // each fill ends exactly under its own pin, so pin and bar always agree
+  const myX = placePin($('pinMe'), myShown);
+  const opX = placePin($('pinRival'), opShown);
+  $('railMe').style.width=myX.toFixed(1)+'px';
+  $('railRival').style.width=opX.toFixed(1)+'px';
+  // pop each pin as it lands on a new notch
+  if(opShown!==S.ghostShownAt){
+    if(S.ghostShownAt>=0){
+      const p=$('pinRival'); p.classList.remove('pop');
+      void p.offsetWidth; p.classList.add('pop');
+    }
+    S.ghostShownAt=opShown;
+  }
+  if(myShown!==S.myShownAt){
+    if(S.myShownAt>=0){
+      const p=$('pinMe'); p.classList.remove('pop');
+      void p.offsetWidth; p.classList.add('pop');
+    }
+    S.myShownAt=myShown;
+  }
+}
+
+/* ---------- main loop ---------- */
+let rafId=null;
+function loop(){
+  if(rafId) cancelAnimationFrame(rafId);
+  const tick=()=>{
+    const now=performance.now();
+    if(!S.over){
+      // The ghost only exists in solo. In multiplayer S.ghostFilled will be fed
+      // from the network instead, so nothing simulates an opponent here.
+      if(S.started && game.mode==='solo') stepGhost(now);
+
+      // Derive the ghost's mistake/lockout counters by observing ghostLockUntil,
+      // which keeps stepGhost() itself untouched.
+      // !== not > : lowering the duration slider can make a newer ghost lockout
+      // end sooner than the previous one, and stepGhost only ever writes this
+      // field when a fresh mistake happens.
+      if(S.ghostLockUntil !== S.ghostLockSeen){
+        S.ghostMistakes++; S.ghostLockouts++; S.ghostTotalLockoutMs += cfg.lockoutMs;
+        S.ghostLockSeen = S.ghostLockUntil;
+        shakePin($('pinRival'));
+      }
+      paintPenalties(now);
+
+      // lockout expiry
+      if(S.lockUntil && now>=S.lockUntil){ S.lockUntil=0; endLockout(); updatePad(); }
+      if(S.lockUntil){
+        // full circle at the start, nothing left when the lockout ends.
+        // Negative offset drains the ring clockwise from 12 o'clock.
+        const frac=Math.max(0,Math.min(1,(now-S.lockStart)/(S.lockUntil-S.lockStart)));
+        $('lockring').style.strokeDashoffset=(-frac*RING_C).toFixed(2);
+      }
+
+      paintRail();
+
+      // clock — only runs once the race has actually started
+      if(S.started){
+        const t=Math.floor((now-S.startTime)/1000);
+        $('clock').textContent=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+
+        // opponent win. In multiplayer this will instead be driven by a
+        // "finished" message from the remote player.
+        if(game.mode==='solo' && !S.decided && S.ghostFilled>=S.totalEmpty) opponentFinished();
+      }
+    }
+    rafId=requestAnimationFrame(tick);
+  };
+  rafId=requestAnimationFrame(tick);
+}
+
+function checkWin(){
+  const myFilled=S.grid.filter((v,i)=>S.puzzle[i]==='0' && v!==0).length;
+  if(myFilled>=S.totalEmpty) playerFinished();
+}
+
+/* ---------- results ---------- */
+function fmtClock(ms){
+  const t=Math.max(0,Math.floor(ms/1000));
+  return Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+}
+function fmtSecs(ms){
+  const s=ms/1000;
+  return (s>=10 ? Math.round(s) : Math.round(s*10)/10)+'s';
+}
+
+/* The rival completed the board first. The race is decided, but nothing is
+   thrown in the player's face: the board stays live so they can keep solving,
+   and an "Auto complete" button appears if they'd rather just see it done. */
+function opponentFinished(){
+  if(S.decided || S.over) return;
+  S.decided = true;
+  S.ghostFinished = true;
+  S.ghostEndTime = performance.now();
+  showAutoComplete(true);
+}
+
+/* The player's board is now complete — either solved or auto-filled. This is
+   the only path that shows the results card. */
+function playerFinished(){
+  if(S.over) return;
+  S.over = true;
+  S.decided = true;
+  S.finished = true;
+  S.myEndTime = performance.now();
+  paintRail();          // the loop stops here, so draw the finishing notch now
+  clearPenalties();     // …and drop any X still showing, for the same reason
+  endLockout();
+  showAutoComplete(false);
+  if(game.mode==='mp'){
+    net.send({t:'progress', filled:S.totalEmpty});
+    net.send({t:'finished', ms:Math.round(S.myEndTime-S.startTime),
+              mistakes:S.mistakes, lockouts:S.lockouts, lockedMs:S.totalLockoutMs});
+  }
+  renderResults(!S.ghostFinished);     // beaten to it => not a win
+  $('result').classList.add('on');
+}
+
+/* ---------- auto complete ---------- */
+function showAutoComplete(on){
+  $('btnAutoComplete').hidden = !on;   // its slot stays reserved either way
+}
+let autoTimer=null;
+function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+function autoComplete(){
+  if(!S || S.over || S.autoFilling) return;
+  S.autoFilling = true;                 // blocks manual input while it runs
+  showAutoComplete(false);
+  S.lockUntil = 0; endLockout(); updatePad();
+  const empties=[];
+  for(let i=0;i<81;i++) if(S.puzzle[i]==='0' && S.grid[i]===0) empties.push(i);
+  let k=0;
+  stopAuto();
+  autoTimer=setInterval(()=>{
+    if(k>=empties.length){ stopAuto(); S.autoFilling=false; playerFinished(); return; }
+    const i=empties[k++];
+    S.grid[i]=S.solution[i];
+    S.notes[i]=new Set();
+    renderCell(i);
+    const el=cellAt(i);
+    el.classList.remove('autofill'); void el.offsetWidth; el.classList.add('autofill');
+    updatePad();
+    netProgress();
+  }, 45);
+}
+$('btnAutoComplete').addEventListener('click', autoComplete);
+
+function renderResults(iWon){
+  // Solo: derived from the ghost. Multiplayer: relayed by the opponent.
+  const opKnown = true;
+
+  $('resTitle').textContent = iWon ? 'You win!' : opponentName+' wins';
+  $('resTitle').className   = iWon ? 'win' : 'lose';
+  $('resSub').textContent   = iWon
+    ? 'Board complete. Nicely scanned.'
+    : 'They filled the last cell first.';
+
+  $('sbMe').textContent = playerName;
+  $('sbOp').textContent = opponentName;
+
+  $('sbTimeMe').textContent = S.finished ? fmtClock(S.myEndTime - S.startTime) : '—';
+  $('sbTimeOp').textContent = !opKnown ? '—'
+    : (S.ghostFinished ? fmtClock(S.ghostEndTime - S.startTime) : '—');
+
+  $('sbMisMe').textContent  = S.mistakes;
+  $('sbMisOp').textContent  = opKnown ? S.ghostMistakes : '—';
+  $('sbLockMe').textContent = S.lockouts;
+  $('sbLockOp').textContent = opKnown ? S.ghostLockouts : '—';
+  $('sbLmsMe').textContent  = fmtSecs(S.totalLockoutMs);
+  $('sbLmsOp').textContent  = opKnown ? fmtSecs(S.ghostTotalLockoutMs) : '—';
+}
+function hideResult(){ $('result').classList.remove('on'); }
+
+/* ============================================================
+   START SCREEN / LOBBY
+   ============================================================ */
+const NAME_KEY = 'sudokuRace.playerName';
+/* Room codes: 4 chars, no O/0 and no I/1 so they can be read aloud.
+   The server mints them; this alphabet is only used to validate typed input. */
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function loadStoredName(){
+  try{ return localStorage.getItem(NAME_KEY) || ''; }catch(e){ return ''; }
+}
+function storeName(v){
+  try{ localStorage.setItem(NAME_KEY, v); }catch(e){ /* private mode — ignore */ }
+}
+function validName(v){
+  const t=(v||'').trim();
+  return (t.length>=2 && t.length<=14) ? t : null;
+}
+function validCode(v){
+  const t=(v||'').toUpperCase();
+  return (t.length===4 && [...t].every(ch=>CODE_ALPHABET.includes(ch))) ? t : null;
+}
+
+function showOverlay(screen){ $('overlay').classList.add('on'); showScreen(screen); }
+function hideOverlay(){ $('overlay').classList.remove('on'); }
+function showScreen(name){
+  document.querySelectorAll('#overlay .screen').forEach(s=>
+    s.classList.toggle('on', s.dataset.screen===name));
+}
+
+/* ---------- name field ---------- */
+function refreshNameState(){
+  const raw = $('nameInput').value;
+  const ok  = !!validName(raw);
+  $('btnSolo').disabled = !ok;
+  $('btnMp').disabled   = !ok;
+  const t = raw.trim();
+  $('nameErr').textContent = (t.length===0 || ok) ? ''
+    : (t.length>14 ? 'Max 14 characters.' : 'At least 2 characters.');
+}
+$('nameInput').addEventListener('input', refreshNameState);
+
+/* ---------- join-code field ---------- */
+function refreshCodeState(){
+  const el=$('codeInput');
+  const cleaned = el.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(cleaned!==el.value) el.value=cleaned;
+  const ok = !!validCode(cleaned);
+  $('btnJoin').disabled = !ok;
+  $('codeErr').textContent = (cleaned.length===4 && !ok)
+    ? 'Codes never contain O, 0, I or 1.' : '';
+}
+$('codeInput').addEventListener('input', refreshCodeState);
+
+/* ---------- countdown ---------- */
+let cdTimer=null;
+function stopCountdown(){ if(cdTimer){ clearInterval(cdTimer); cdTimer=null; } }
+function runCountdown(done){
+  stopCountdown();
+  let n=3;
+  const el=$('cdNum');
+  $('cdMe').textContent = playerName;
+  $('cdOp').textContent = opponentName;
+  const paint=()=>{
+    el.textContent=n;
+    el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+  };
+  showScreen('countdown');
+  paint();
+  cdTimer=setInterval(()=>{
+    n--;
+    if(n<=0){ stopCountdown(); done(); return; }
+    paint();
+  },1000);
+}
+
+/* ---------- entry points ---------- */
+function commitName(){
+  const t = validName($('nameInput').value);
+  if(!t) return null;
+  playerName = t;
+  storeName(t);
+  return t;
+}
+
+function startSolo(boardIndex){
+  game.mode = 'solo';
+  game.roomCode = null;
+  game.isHost = false;
+  opponentName = GHOST_NAME;
+  setupBoard(boardIndex);            // undefined -> next board from the rotation
+  hideOverlay();
+  startRace();                    // solo starts immediately, no countdown
+}
+
+$('btnSolo').addEventListener('click',()=>{
+  if(!commitName()) return;
+  startSolo();                       // fresh board from the rotation each time
+});
+
+$('btnMp').addEventListener('click',()=>{
+  if(!commitName()) return;
+  $('mpWho').textContent = playerName;
+  $('codeInput').value = '';
+  refreshCodeState();
+  showScreen('mp');
+});
+
+document.querySelectorAll('#overlay [data-goto]').forEach(b=>
+  b.addEventListener('click',()=>showScreen(b.dataset.goto)));
+
+/* ---------- difficulty picker ---------- */
+function syncDiffSeg(){
+  document.querySelectorAll('#diffSeg .segbtn').forEach(b=>
+    b.classList.toggle('on', b.dataset.diff===game.difficulty));
+  const n = (BOARDS[game.difficulty]||[]).length;
+  $('diffHint').textContent = DIFF_LABEL[game.difficulty]+' · '+n+' board'+(n===1?'':'s')+' in rotation';
+}
+document.querySelectorAll('#diffSeg .segbtn').forEach(b=>{
+  b.addEventListener('click',()=>{
+    // TODO(multiplayer): only the host picks this; a joining client should take
+    // the difficulty (and board) the server hands it.
+    game.difficulty = b.dataset.diff;
+    syncDiffSeg();
+  });
+});
+syncDiffSeg();
+
+/* ============================================================
+   NETWORK — a thin WebSocket client. The server owns room codes, pairs the two
+   players and decides the board index; everything else it just relays. Native
+   WebSocket only, so the page stays dependency-free.
+   ============================================================ */
+const net = {
+  ws:null,
+  open(){                                     // resolves once connected
+    if(net.ws && net.ws.readyState===WebSocket.OPEN) return Promise.resolve();
+    return new Promise((resolve,reject)=>{
+      let ws;
+      try{ ws = new WebSocket(SERVER_URL); }catch(e){ return reject(e); }
+      net.ws = ws;
+      const fail = ()=>reject(new Error('connect failed'));
+      ws.addEventListener('open', ()=>{ resolve(); }, {once:true});
+      ws.addEventListener('error', fail, {once:true});
+      ws.addEventListener('close', ()=>{
+        // Only the *active* socket closing counts as a disconnect. A previous
+        // socket finishing its close handshake must not tear down the session
+        // that has already replaced it.
+        if(net.ws!==ws) return;
+        net.ws=null;
+        if(game.mode==='mp') onDisconnected();
+      });
+      ws.addEventListener('message', ev=>{
+        let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+        onNetMessage(m);
+      });
+    });
+  },
+  send(obj){
+    if(net.ws && net.ws.readyState===WebSocket.OPEN) net.ws.send(JSON.stringify(obj));
+  },
+  close(){
+    if(net.ws){ try{ net.ws.close(); }catch(e){} net.ws=null; }
+  }
+};
+
+function waitNote(text){ $('waitNote').textContent = text; }
+
+function onNetMessage(m){
+  switch(m.t){
+    case 'created':
+      game.roomCode = m.code;
+      $('codeVal').textContent = m.code;
+      $('codeBoxLbl').textContent = 'Room code';
+      $('codeBoxHint').textContent = 'Share this code with your opponent';
+      $('waitTitle').textContent = 'Waiting for opponent…';
+      waitNote('Connected. Waiting for someone to join.');
+      break;
+
+    case 'begin': {                          // both players present
+      opponentName = m.opponent || 'Opponent';
+      game.difficulty = m.difficulty || game.difficulty;
+      hideResult();
+      setupBoard(m.board);                   // server-chosen: both build the same grid
+      showOverlay('countdown');
+      runCountdown(()=>{ hideOverlay(); startRace(); });
+      break;
+    }
+
+    case 'progress':                         // opponent's true filled count
+      if(S) S.ghostFilled = Math.max(0, Math.min(S.totalEmpty, m.filled|0));
+      break;
+
+    case 'lockout':                          // drives their shake, red X and counters
+      if(S) S.ghostLockUntil = performance.now() + (m.ms|0);
+      break;
+
+    case 'finished':
+      if(S){
+        S.ghostMistakes       = m.mistakes|0;
+        S.ghostLockouts       = m.lockouts|0;
+        S.ghostTotalLockoutMs = m.lockedMs|0;
+        S.ghostFilled         = S.totalEmpty;
+        S.ghostEndTime        = S.startTime + (m.ms|0);
+        opponentFinished();
+      }
+      break;
+
+    case 'rematchWait':
+      showOverlay('waiting');
+      $('waitTitle').textContent = 'Rematch requested';
+      $('codeBoxLbl').textContent = 'Room code';
+      $('codeVal').textContent = game.roomCode || '————';
+      $('codeBoxHint').textContent = 'Waiting for '+opponentName+' to accept';
+      waitNote('They will see the request on their results screen.');
+      break;
+
+    case 'rematchAsk':
+      waitNote(opponentName+' wants a rematch — pick a rematch button.');
+      break;
+
+    case 'oppLeft':
+      onOpponentLeft();
+      break;
+
+    case 'error':
+      netError(m.code);
+      break;
+  }
+}
+
+function netError(code){
+  const msg = code==='no_such_room' ? 'No match with that code.'
+            : code==='room_full'    ? 'That match is already full.'
+            : code==='no_opponent'  ? 'Your opponent has left.'
+            : 'Something went wrong ('+code+').';
+  $('codeErr').textContent = msg;
+  showScreen('mp');
+  net.close();
+  game.mode='solo'; game.roomCode=null; game.isHost=false;
+}
+
+function onDisconnected(){
+  if(game.mode!=='mp') return;
+  if(S && S.started && !S.over){ waitNote('Connection lost.'); }
+  game.mode='solo'; game.roomCode=null; game.isHost=false;
+  stopCountdown();
+  showOverlay('mp');
+  $('codeErr').textContent = 'Connection lost.';
+}
+
+function onOpponentLeft(){
+  // They forfeited. Leave the board playable rather than yanking the screen.
+  if(S && S.started && !S.over){
+    S.decided = true;
+    showAutoComplete(true);
+  }
+  $('codeErr').textContent = opponentName+' left the match.';
+  if(!S || !S.started) { showOverlay('mp'); }
+}
+
+/* ---------- multiplayer: create ---------- */
+$('btnCreate').addEventListener('click',async ()=>{
+  game.mode='mp'; game.isHost=true; game.roomCode=null;
+  opponentName = MP_OPPONENT_PLACEHOLDER;
+  $('codeVal').textContent='····';
+  $('codeBoxLbl').textContent='Room code';
+  $('codeBoxHint').textContent='';
+  $('waitTitle').textContent='Creating match…';
+  waitNote('Connecting…');
+  showScreen('waiting');
+  try{
+    await net.open();
+    net.send({t:'create', name:playerName, difficulty:game.difficulty,
+              poolSize:activePool().length});
+  }catch(e){
+    $('codeErr').textContent='Could not reach the server.';
+    showScreen('mp'); game.mode='solo';
+  }
+});
+
+/* ---------- multiplayer: join ---------- */
+$('btnJoin').addEventListener('click',async ()=>{
+  const code = validCode($('codeInput').value);
+  if(!code) return;
+  game.mode='mp'; game.isHost=false; game.roomCode=code;
+  opponentName = MP_OPPONENT_PLACEHOLDER;
+  $('waitTitle').textContent='Joining '+code+'…';
+  $('codeBoxLbl').textContent='Joining room';
+  $('codeVal').textContent=code;
+  $('codeBoxHint').textContent='Waiting for the host';
+  waitNote('Connecting…');
+  showScreen('waiting');
+  try{
+    await net.open();
+    net.send({t:'join', code, name:playerName, poolSize:activePool().length});
+  }catch(e){
+    $('codeErr').textContent='Could not reach the server.';
+    showScreen('mp'); game.mode='solo';
+  }
+});
+
+$('btnCancelWait').addEventListener('click',()=>{
+  stopCountdown();
+  net.send({t:'leave'});
+  net.close();
+  game.mode='solo'; game.roomCode=null; game.isHost=false;
+  showScreen('mp');
+});
+
+/* ---------- results buttons ---------- */
+function rematch(boardIndex){
+  if(game.mode==='mp'){
+    // both sides must agree; the server sends 'begin' when they do
+    net.send({t:'rematch', same:boardIndex!==undefined});
+    return;
+  }
+  hideResult();
+  setupBoard(boardIndex);
+  startRace();
+}
+$('btnRematchSame').addEventListener('click',()=>rematch(game.boardIndex));
+/* undefined -> next board from the difficulty's rotation */
+$('btnRematchNew').addEventListener('click',()=>rematch());
+/* the match is already over here, so no confirmation is needed */
+$('btnHome').addEventListener('click',()=>quitToMenu());
+
+/* ---------- leaving a match ----------
+   The back arrow abandons the race. Confirm first, but only while there is
+   actually something to lose: a live race. */
+function showConfirm(){ $('confirm').classList.add('on'); }
+function hideConfirm(){ $('confirm').classList.remove('on'); }
+
+function quitToMenu(){
+  hideConfirm();
+  hideResult();
+  stopCountdown();
+  stopAuto();
+  showAutoComplete(false);
+  if(game.mode==='mp'){ net.send({t:'leave'}); net.close(); }
+  game.mode = 'solo';
+  game.roomCode = null;
+  game.isHost = false;
+  opponentName = GHOST_NAME;
+  if(S) S.over = true;            // stop the loop advancing a match we walked out of
+  endLockout();
+  showOverlay('home');
+  refreshNameState();
+}
+
+$('btnLeave').addEventListener('click',()=>{
+  const live = S && S.started && !S.over;
+  if(live) showConfirm(); else quitToMenu();   // nothing at stake -> no prompt
+});
+$('btnQuitStay').addEventListener('click', hideConfirm);
+$('btnQuitYes').addEventListener('click', quitToMenu);
+
+/* ---------- debug panel ---------- */
+$('dbgToggle').addEventListener('click',()=>$('debug').classList.toggle('on'));
+$('dbgClose').addEventListener('click',()=>$('debug').classList.remove('on'));
+/* #btnSettings is intentionally inert — placeholder for a real settings screen */
+function bind(id,key,fmt,post){
+  const el=$('d_'+id), val=$('v_'+id);
+  const apply=()=>{ let v=parseFloat(el.value); cfg[key]=v; val.textContent=fmt?fmt(v):v; if(post)post(v); };
+  el.addEventListener('input',apply); apply();
+}
+bind('lockout','lockoutMs');
+bind('blur','blur',null,v=>document.documentElement.style.setProperty('--blur',v+'px'));
+bind('cov','coverage',v=>v.toFixed(2),()=>{ if(lockEl.classList.contains('on')) applyLockoutMask(); });
+bind('spc','ghostSpc',v=>v.toFixed(1));
+bind('mist','ghostMistake',v=>v.toFixed(3));
+bind('bmin','burstMin');
+bind('bmax','burstMax');
+bind('clamp','leadClamp');
+bind('honest','honest',v=>v.toFixed(2));
+
+/* the track's width and inset are viewport-dependent, so re-place the pins and
+   fills on resize/rotate — the loop stops painting once a race is over */
+window.addEventListener('resize',()=>{ if(S) paintRail(); });
+
+/* keyboard support (desktop testing) */
+window.addEventListener('keydown',e=>{
+  if(e.key>='1'&&e.key<='9') input(+e.key);
+});
+
+/* ---------- go ----------
+   Build a board immediately so the geometry is settled behind the overlay,
+   but don't start the race until a mode is chosen. */
+document.documentElement.style.setProperty('--blur', cfg.blur+'px');
+setupBoard(0);
+$('nameInput').value = loadStoredName();
+refreshNameState();
+showOverlay('home');
+</script>
+</body>
+</html>
