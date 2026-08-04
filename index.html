@@ -583,9 +583,7 @@ const BOARDS = {
    `py -3 server.py` on the same machine); set it to your wss:// host once
    deployed. If the page is served over https the URL must be wss://, or the
    browser will block the connection as mixed content. */
-const SERVER_URL = (location.hostname==='localhost' || location.hostname==='127.0.0.1' || location.protocol==='file:')
-  ? 'ws://127.0.0.1:8787'
-  : 'wss://REPLACE-WITH-YOUR-SERVER';
+const SERVER_URL = 'wss://sudoku-race-qgwr.onrender.com';
 
 const DIFFICULTIES = ['easy','medium','hard'];
 const DIFF_LABEL = { easy:'Easy', medium:'Medium', hard:'Hard' };

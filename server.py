@@ -36,7 +36,6 @@ import asyncio
 import json
 import os
 import random
-import string
 
 from websockets.asyncio.server import serve
 from websockets.http11 import Response
@@ -89,7 +88,7 @@ async def do_create(player, msg):
         "rematch": {},
     }
     await send(player, {"t": "created", "code": code})
-    print(f"[room {code}] created by {player['name']}")
+    print(f"[room {code}] created by {player['name']}", flush=True)
 
 
 async def do_join(player, msg):
@@ -107,7 +106,7 @@ async def do_join(player, msg):
     room["players"].append(player)
     # be defensive: if the two clients disagree on pool size, use the smaller
     room["poolSize"] = min(room["poolSize"], max(1, int(msg.get("poolSize") or 1)))
-    print(f"[room {code}] {player['name']} joined")
+    print(f"[room {code}] {player['name']} joined", flush=True)
     await begin(code)
 
 
@@ -126,7 +125,7 @@ async def begin(code, board=None):
                    "board": board, "opponent": b["name"]})
     await send(b, {"t": "begin", "difficulty": room["difficulty"],
                    "board": board, "opponent": a["name"]})
-    print(f"[room {code}] begin board={board} diff={room['difficulty']}")
+    print(f"[room {code}] begin board={board} diff={room['difficulty']}", flush=True)
 
 
 async def do_rematch(player, msg):
@@ -167,9 +166,9 @@ async def do_leave(player):
         await send(p, {"t": "oppLeft"})
     if not room["players"]:
         rooms.pop(code, None)
-        print(f"[room {code}] closed")
+        print(f"[room {code}] closed", flush=True)
     else:
-        print(f"[room {code}] {player['name']} left")
+        print(f"[room {code}] {player['name']} left", flush=True)
 
 
 async def handler(ws):
@@ -211,7 +210,7 @@ async def main():
     port = int(os.environ.get("PORT", "8787"))
     host = os.environ.get("HOST", "0.0.0.0")
     async with serve(handler, host, port, process_request=health):
-        print(f"sudoku-race server listening on {host}:{port}")
+        print(f"sudoku-race server listening on {host}:{port}", flush=True)
         await asyncio.Future()
 
 
