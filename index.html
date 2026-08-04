@@ -998,7 +998,7 @@ function syncControls(){
   $('btnUndo').disabled  = !S || locked || S.history.length===0;
   $('btnErase').disabled = !S || locked;
   $('btnNotes').disabled = !S || locked;
-  $('btnEmotes').disabled = !S || locked || performance.now() < emoteCoolUntil;
+  $('btnEmotes').disabled = !S;      // usable even while locked out
 }
 $('btnUndo').addEventListener('click', undo);
 $('btnErase').addEventListener('click', erase);
@@ -1009,8 +1009,6 @@ $('btnNotes').addEventListener('click', toggleNotes);
    emoji. Keep holding, slide onto one, release to send it. Releasing anywhere
    else cancels. Swap the characters below to change the set. */
 const EMOTES = ['😠','🤩','😮','😢','😅'];
-const EMOTE_COOLDOWN_MS = 1200;      // stops one player flooding the other's screen
-let emoteCoolUntil = 0;
 
 EMOTES.forEach(ch=>{
   const b=document.createElement('button');
@@ -1024,13 +1022,10 @@ function showEmote(side, ch){
   el.textContent = ch;
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
 }
+/* No rate limit by design — spam away. */
 function sendEmote(ch){
-  if(performance.now() < emoteCoolUntil) return;
-  emoteCoolUntil = performance.now() + EMOTE_COOLDOWN_MS;
   showEmote('me', ch);
   if(game.mode==='mp') net.send({t:'emote', e:ch});
-  syncControls();
-  setTimeout(syncControls, EMOTE_COOLDOWN_MS + 20);
 }
 
 /* hold-and-slide picker */
