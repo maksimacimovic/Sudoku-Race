@@ -34,7 +34,8 @@
   /* vertical chrome around the board — keep in sync with --chrome below */
   --pad-h:52px; --pad-top:14px; --disc:48px; --act-top:18px; --disc-font:19px;
   --auto-h:48px; --auto-top:10px;  /* reserved Auto-complete slot */
-  --rail-gap:46px;                 /* breathing room between the bar and the board */
+  /* the bar->board gap, now split around the hearts row: 14+18+14 = 46 */
+  --lives-top:14px; --lives-h:18px; --rail-gap:14px;
   --chrome:384px;                  /* measured from the DOM, incl. --rail-gap */
   /* board geometry — 369px at design size; shrinks to fit narrow OR short screens
      so the whole layout always fits the viewport without scrolling */
@@ -114,6 +115,20 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 /* the portrait is a normal flex child now, so a plain scale is correct here */
 @keyframes srAvPop{0%{transform:scale(1)}34%{transform:scale(1.22)}100%{transform:scale(1)}}
 .portrait.pop{animation:srAvPop 420ms cubic-bezier(.2,1.4,.3,1) 1;}
+
+/* ---------- lives ----------
+   One row sitting in the bar-to-board gap: your hearts under your portrait,
+   the rival's under theirs. Spent hearts stay in place, greyed, so the count
+   never shifts around. */
+.lives{display:flex; justify-content:space-between; align-items:center; flex:none;
+  margin-top:var(--lives-top); height:var(--lives-h);}
+.hearts{display:flex; gap:4px; width:62px; justify-content:center;}
+.heart{width:var(--lives-h); height:var(--lives-h); display:block; flex:none;}
+.heart path{fill:var(--danger);}
+.heart.lost path{fill:var(--border-soft);}
+@keyframes srHeartBreak{
+  0%{transform:scale(1)} 30%{transform:scale(1.35)} 100%{transform:scale(1)}}
+.heart.breaking{animation:srHeartBreak 420ms ease-out 1;}
 
 /* ---------- board ---------- */
 .boardwrap{position:relative; flex:none; align-self:center; margin-top:var(--rail-gap);}
@@ -204,7 +219,7 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   :root{
     --pad-h:46px; --pad-top:12px; --disc:40px; --act-top:14px; --disc-font:16px;
     --auto-h:40px; --auto-top:8px;
-    --rail-gap:22px;
+    --lives-top:3px; --lives-h:16px; --rail-gap:3px;
     --chrome:330px;
   }
 }
@@ -376,6 +391,12 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
       <div class="portrait" id="avRival"><span class="xmark" aria-hidden="true"></span></div>
       <span class="sidename" id="rivalName">Rival</span>
     </div>
+  </div>
+
+  <!-- lives: yours on the left under your portrait, theirs on the right -->
+  <div class="lives">
+    <div class="hearts" id="heartsMe"></div>
+    <div class="hearts" id="heartsOp"></div>
   </div>
 
   <div class="boardwrap">
@@ -581,6 +602,10 @@ const SERVER_URL = 'wss://sudoku-race-qgwr.onrender.com';
 
 const DIFFICULTIES = ['easy','medium','hard'];
 const DIFF_LABEL = { easy:'Easy', medium:'Medium', hard:'Hard' };
+/* Lives are ON: every mistake costs one heart. Run out and your board is over.
+   Fewer hearts the harder the board — on hard, the first mistake ends it. */
+const LIVES_BY_DIFF = { easy:3, medium:2, hard:1 };
+function livesFor(diff){ return LIVES_BY_DIFF[diff] || 3; }
 
 /* ---------- board rotation ----------
    A shuffled bag per difficulty: every board in a pool is played once before
@@ -707,6 +732,10 @@ function setupBoard(boardIndex){
     // race lifecycle — the clock does not run until startRace()
     started:false, startTime:0, finished:false, myEndTime:0,
     decided:false, autoFilling:false,   // decided = someone finished; board may still be live
+    // lives — one heart per mistake, per side
+    lives:livesFor(game.difficulty), livesLeft:livesFor(game.difficulty), eliminated:false,
+    ghostLives:livesFor(game.difficulty), ghostLivesLeft:livesFor(game.difficulty),
+    ghostEliminated:false,
     notes:Array.from({length:81},()=>new Set()), notesOn:false, history:[],
     // my counters (results screen + analytics later)
     mistakes:0, lockouts:0, totalLockoutMs:0,
@@ -727,6 +756,7 @@ function setupBoard(boardIndex){
   endLockout();
   clearPenalties();
   syncNames();
+  renderHearts();
   syncControls();
   $('clock').textContent='0:00';
   loop();
@@ -788,6 +818,28 @@ function syncNames(){
   $('myName').textContent    = playerName;
 }
 
+/* ---------- hearts ---------- */
+const HEART_PATH = 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3'
+  + 'c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5'
+  + 'c0 3.78-3.4 6.86-8.55 11.54L12 21.35z';
+function heartsHTML(total,left){
+  let h='';
+  for(let i=0;i<total;i++)
+    h += '<svg class="heart'+(i<left?'':' lost')+'" viewBox="0 0 24 24" aria-hidden="true">'
+       + '<path d="'+HEART_PATH+'"/></svg>';
+  return h;
+}
+function renderHearts(brokeSide){
+  $('heartsMe').innerHTML = heartsHTML(S.lives, S.livesLeft);
+  $('heartsOp').innerHTML = heartsHTML(S.ghostLives, S.ghostLivesLeft);
+  if(brokeSide){                       // pulse the heart that just went
+    const box  = $(brokeSide==='me' ? 'heartsMe' : 'heartsOp');
+    const idx  = brokeSide==='me' ? S.livesLeft : S.ghostLivesLeft;
+    const el   = box.children[idx];
+    if(el) el.classList.add('breaking');
+  }
+}
+
 function paintSelection(){
   const sel=S.sel;
   const selVal = sel>=0 ? S.grid[sel] : 0;
@@ -812,7 +864,7 @@ function select(i){
 function editable(i){ return S.puzzle[i]==='0' && S.grid[i]===0; }
 
 function input(n){
-  if(!S || S.over || !S.started || S.autoFilling) return;   // not before the countdown, not mid-autofill
+  if(!S || S.over || !S.started || S.autoFilling || S.eliminated) return;
   if(performance.now() < S.lockUntil) return;            // locked out
   const i=S.sel;
   if(i<0 || !editable(i)) return;
@@ -839,15 +891,22 @@ function input(n){
     netProgress();          // only a count leaves this device, never the solution
     checkWin();
   } else {
-    // strict mistake: flash red on a red tint, never commit, then lock out
+    // strict mistake: flash red on a red tint, never commit
     S.mistakes++;
     const el=cellAt(i);
     el.querySelector('.notes').hidden=true;      // don't draw marks under the flash
     setDigit(i,n); el.classList.add('wrong');
     setTimeout(()=>{ el.classList.remove('wrong'); renderCell(i); }, 620);
-    startLockout();
-    // mirror the penalty so their pin shakes and wears the X for the same time
-    if(game.mode==='mp') net.send({t:'lockout', ms:cfg.lockoutMs});
+    // every mistake costs a heart
+    S.livesLeft = Math.max(0, S.livesLeft-1);
+    renderHearts('me');
+    if(S.livesLeft<=0){
+      eliminateMe();                             // last heart gone: no cooldown, it's over
+    } else {
+      startLockout();
+      // mirror the penalty so their side shakes and wears the X for the same time
+      if(game.mode==='mp') net.send({t:'lockout', ms:cfg.lockoutMs});
+    }
   }
 }
 
@@ -1072,6 +1131,9 @@ function loop(){
         S.ghostMistakes++; S.ghostLockouts++; S.ghostTotalLockoutMs += cfg.lockoutMs;
         S.ghostLockSeen = S.ghostLockUntil;
         shakeSide($('sideOp'));
+        S.ghostLivesLeft = Math.max(0, S.ghostLivesLeft-1);
+        renderHearts('op');
+        if(S.ghostLivesLeft<=0) eliminateOpponent();
       }
       paintPenalties(now);
 
@@ -1127,6 +1189,37 @@ function opponentFinished(){
   showAutoComplete(true);
 }
 
+/* ---------- running out of hearts ---------- */
+
+/* My last heart is gone. Consistent with losing the race: no screen is thrown
+   in my face — input stops and the Auto complete button appears so I can see
+   the board out if I want. */
+function eliminateMe(){
+  if(S.over || S.eliminated) return;
+  S.eliminated = true;
+  S.decided = true;
+  S.lockUntil = 0;
+  endLockout(); updatePad(); clearPenalties();
+  showAutoComplete(true);
+  if(game.mode==='mp'){
+    // `failed` rides along on the finished message — the server relays the whole
+    // object untouched, so this needs no server change.
+    net.send({t:'finished', failed:true, ms:Math.round(performance.now()-S.startTime),
+              mistakes:S.mistakes, lockouts:S.lockouts, lockedMs:S.totalLockoutMs});
+  }
+}
+
+/* The opponent ran out. That decides it in my favour straight away. */
+function eliminateOpponent(){
+  if(S.over) return;
+  S.ghostEliminated = true;
+  S.decided = true;
+  S.over = true;
+  paintRail(); clearPenalties(); endLockout(); showAutoComplete(false);
+  renderResults(true, opponentName+' ran out of hearts.');
+  $('result').classList.add('on');
+}
+
 /* The player's board is now complete — either solved or auto-filled. This is
    the only path that shows the results card. */
 function playerFinished(){
@@ -1144,7 +1237,9 @@ function playerFinished(){
     net.send({t:'finished', ms:Math.round(S.myEndTime-S.startTime),
               mistakes:S.mistakes, lockouts:S.lockouts, lockedMs:S.totalLockoutMs});
   }
-  renderResults(!S.ghostFinished);     // beaten to it => not a win
+  // beaten to it, or already out of hearts => not a win
+  renderResults(!S.ghostFinished && !S.eliminated,
+                S.eliminated ? 'You ran out of hearts.' : null);
   $('result').classList.add('on');
 }
 
@@ -1177,15 +1272,15 @@ function autoComplete(){
 }
 $('btnAutoComplete').addEventListener('click', autoComplete);
 
-function renderResults(iWon){
+function renderResults(iWon, reason){
   // Solo: derived from the ghost. Multiplayer: relayed by the opponent.
   const opKnown = true;
 
   $('resTitle').textContent = iWon ? 'You win!' : opponentName+' wins';
   $('resTitle').className   = iWon ? 'win' : 'lose';
-  $('resSub').textContent   = iWon
+  $('resSub').textContent   = reason || (iWon
     ? 'Board complete. Nicely scanned.'
-    : 'They filled the last cell first.';
+    : 'They filled the last cell first.');
 
   $('sbMe').textContent = playerName;
   $('sbOp').textContent = opponentName;
@@ -1319,7 +1414,9 @@ function syncDiffSeg(){
   document.querySelectorAll('#diffSeg .segbtn').forEach(b=>
     b.classList.toggle('on', b.dataset.diff===game.difficulty));
   const n = (BOARDS[game.difficulty]||[]).length;
-  $('diffHint').textContent = DIFF_LABEL[game.difficulty]+' · '+n+' board'+(n===1?'':'s')+' in rotation';
+  const lv = livesFor(game.difficulty);
+  $('diffHint').textContent = DIFF_LABEL[game.difficulty]+' · '+lv+' heart'+(lv===1?'':'s')
+    +' · '+n+' board'+(n===1?'':'s')+' in rotation';
 }
 document.querySelectorAll('#diffSeg .segbtn').forEach(b=>{
   b.addEventListener('click',()=>{
@@ -1405,9 +1502,16 @@ function onNetMessage(m){
         S.ghostMistakes       = m.mistakes|0;
         S.ghostLockouts       = m.lockouts|0;
         S.ghostTotalLockoutMs = m.lockedMs|0;
-        S.ghostFilled         = S.totalEmpty;
-        S.ghostEndTime        = S.startTime + (m.ms|0);
-        opponentFinished();
+        if(m.failed){
+          // they ran out of hearts — they never completed the board
+          S.ghostLivesLeft = 0;
+          renderHearts('op');
+          eliminateOpponent();
+        } else {
+          S.ghostFilled  = S.totalEmpty;
+          S.ghostEndTime = S.startTime + (m.ms|0);
+          opponentFinished();
+        }
       }
       break;
 
