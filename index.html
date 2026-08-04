@@ -995,10 +995,10 @@ function opponentDisplay(myProg){
 }
 
 /* ---------- rail notches ----------
-   Both rails advance in whole notches of NOTCH solved cells, so neither side
-   creeps forward on every single digit. Partial progress inside a notch is
-   never drawn. If the tail of the board is shorter than a notch, the bar holds
-   still and snaps to the very end on the final cell. */
+   Only the SOLO ghost is drawn in notches now. Its displayed position is
+   clamped to your own progress, so per-cell drawing would make it creep
+   forward every time you place a digit — the notch stops that. Real progress
+   (yours, and a live opponent's) is drawn per cell. */
 const NOTCH = 3;
 function notchFrac(filled, totalEmpty){
   if(totalEmpty<=0) return 0;
@@ -1043,15 +1043,16 @@ function paintPenalties(now){
 function paintRail(){
   const myFilled = S.grid.filter((v,i)=>S.puzzle[i]==='0' && v!==0).length;
   const myProg = myFilled/S.totalEmpty;              // TRUE progress
+  const frac = c => S.totalEmpty>0 ? Math.max(0, Math.min(1, c/S.totalEmpty)) : 0;
+  // Your rail moves on every correct digit.
+  const myShown = frac(myFilled);
   // Solo hides the ghost's real pace (milestone gating + lead clamp) so a
-  // scripted opponent reads as plausible. Against a real player there is
-  // nothing to disguise, so show their true progress.
-  const opCells = game.mode==='mp'
-    ? S.ghostFilled
-    : Math.round(opponentDisplay(myProg) * S.totalEmpty);
-  // quantise BOTH to notches for drawing only — the values above stay exact
-  const myShown = notchFrac(myFilled, S.totalEmpty);
-  const opShown = notchFrac(opCells, S.totalEmpty);
+  // scripted opponent reads as plausible, and stays notched so it can't creep
+  // alongside you. Against a real player there is nothing to disguise, so show
+  // their true progress, advancing on every digit they place.
+  const opShown = game.mode==='mp'
+    ? frac(S.ghostFilled)
+    : notchFrac(Math.round(opponentDisplay(myProg) * S.totalEmpty), S.totalEmpty);
   // each fill ends exactly under its own pin, so pin and bar always agree
   const myX = placePin($('pinMe'), myShown);
   const opX = placePin($('pinRival'), opShown);
