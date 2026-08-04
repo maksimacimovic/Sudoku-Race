@@ -34,9 +34,9 @@
   /* vertical chrome around the board — keep in sync with --chrome below */
   --pad-h:52px; --pad-top:14px; --disc:48px; --act-top:18px; --disc-font:19px;
   --auto-h:48px; --auto-top:10px;  /* reserved Auto-complete slot */
-  /* the bar->board gap, now split around the hearts row: 14+18+14 = 46 */
-  --lives-top:14px; --lives-h:18px; --rail-gap:14px;
-  --chrome:384px;                  /* measured from the DOM, incl. --rail-gap */
+  --lives-h:18px;                  /* heart size, above each portrait */
+  --rail-gap:22px;                 /* bar -> board breathing room */
+  --chrome:418px;                  /* measured from the DOM (416) + 2px slack */
   /* board geometry — 369px at design size; shrinks to fit narrow OR short screens
      so the whole layout always fits the viewport without scrolling */
   --board:min(369px, calc(100vw - 24px), calc(100dvh - var(--chrome)));
@@ -70,7 +70,9 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
    Portrait, bar, portrait. Your teal fills rightward from your end, the rival's
    red fills leftward from theirs, and the crown marks the centre finish. Each
    side therefore owns half the bar's width. */
-.rail{display:flex; align-items:flex-start; gap:10px; padding-top:10px; flex:none;}
+.rail{display:flex; flex-direction:column; padding-top:8px; flex:none;
+  width:var(--board); align-self:center;}
+.railtop{display:flex; justify-content:space-between; align-items:flex-end;}
 .side{display:flex; flex-direction:column; align-items:center; gap:4px;
   width:62px; flex:none;}
 .portrait{position:relative; width:44px; height:44px; border-radius:11px;
@@ -84,7 +86,8 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .me .sidename{color:var(--teal-700);}
 .op .sidename{color:var(--danger);}
 .locked .me .sidename{color:var(--teal-300);}
-.barwrap{position:relative; flex:1; margin-top:15px; min-width:0;}
+/* the rail is board-width, so the bar is exactly as long as the board */
+.barwrap{position:relative; margin-top:22px;}
 .crown{position:absolute; left:50%; top:-19px; transform:translateX(-50%);
   width:22px; height:22px;}
 .track{position:relative; height:16px; border-radius:var(--r-pill);
@@ -117,12 +120,9 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .portrait.pop{animation:srAvPop 420ms cubic-bezier(.2,1.4,.3,1) 1;}
 
 /* ---------- lives ----------
-   One row sitting in the bar-to-board gap: your hearts under your portrait,
-   the rival's under theirs. Spent hearts stay in place, greyed, so the count
-   never shifts around. */
-.lives{display:flex; justify-content:space-between; align-items:center; flex:none;
-  margin-top:var(--lives-top); height:var(--lives-h);}
-.hearts{display:flex; gap:4px; width:62px; justify-content:center;}
+   Hearts sit above each portrait. Spent hearts stay in place, greyed, so the
+   count never shifts around. */
+.hearts{display:flex; gap:4px; height:var(--lives-h); justify-content:center;}
 .heart{width:var(--lives-h); height:var(--lives-h); display:block; flex:none;}
 .heart path{fill:var(--danger);}
 .heart.lost path{fill:var(--border-soft);}
@@ -251,8 +251,8 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   :root{
     --pad-h:46px; --pad-top:12px; --disc:40px; --act-top:14px; --disc-font:16px;
     --auto-h:40px; --auto-top:8px;
-    --lives-top:3px; --lives-h:16px; --rail-gap:3px;
-    --chrome:330px;
+    --lives-h:16px; --rail-gap:12px;
+    --chrome:376px;   /* measured 374 + 2px slack */
   }
 }
 
@@ -401,12 +401,21 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   </header>
 
   <!-- one shared rail: rival grey behind, your teal in front, pins on opposite sides -->
-  <!-- tug-of-war: you push right in teal, the rival pushes left in red,
-       the crown at the centre is the finish -->
+  <!-- tug-of-war: portraits above (hearts on top), the bar below spanning the
+       full board width. You push right in teal, the rival pushes left in red,
+       and the crown at the centre of the bar is the finish. -->
   <div class="rail">
-    <div class="side me" id="sideMe">
-      <div class="portrait" id="avMe"><span class="xmark" aria-hidden="true"></span></div>
-      <span class="sidename" id="myName">You</span>
+    <div class="railtop">
+      <div class="side me" id="sideMe">
+        <div class="hearts" id="heartsMe"></div>
+        <div class="portrait" id="avMe"><span class="xmark" aria-hidden="true"></span></div>
+        <span class="sidename" id="myName">You</span>
+      </div>
+      <div class="side op" id="sideOp">
+        <div class="hearts" id="heartsOp"></div>
+        <div class="portrait" id="avRival"><span class="xmark" aria-hidden="true"></span></div>
+        <span class="sidename" id="rivalName">Rival</span>
+      </div>
     </div>
     <div class="barwrap">
       <svg class="crown" viewBox="0 0 24 24" aria-hidden="true">
@@ -421,16 +430,6 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
         <div class="mid"></div>
       </div>
     </div>
-    <div class="side op" id="sideOp">
-      <div class="portrait" id="avRival"><span class="xmark" aria-hidden="true"></span></div>
-      <span class="sidename" id="rivalName">Rival</span>
-    </div>
-  </div>
-
-  <!-- lives: yours on the left under your portrait, theirs on the right -->
-  <div class="lives">
-    <div class="hearts" id="heartsMe"></div>
-    <div class="hearts" id="heartsOp"></div>
   </div>
 
   <div class="boardwrap">
