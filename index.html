@@ -75,8 +75,18 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .rail{display:flex; flex-direction:column; padding-top:8px; flex:none;
   width:var(--board); align-self:center;}
 .railtop{display:flex; justify-content:space-between; align-items:flex-end;}
-.side{display:flex; flex-direction:column; align-items:center; gap:4px;
-  width:var(--av); flex:none;}
+.side{display:flex; flex-direction:column; align-items:center; gap:4px; flex:none;}
+/* portrait + cells-remaining, the number turned toward the centre on each side */
+.avrow{display:flex; align-items:center; gap:8px;}
+.op .avrow{flex-direction:row-reverse;}
+.remain{font:700 calc(var(--av) * .34)/1 var(--font); font-variant-numeric:tabular-nums;
+  min-width:1.5em; text-align:center;}
+.me .remain{color:var(--teal-700);}
+.op .remain{color:var(--danger);}
+.locked .me .remain{color:var(--teal-300);}
+/* a small tick when the count drops — enough to notice, not enough to nag */
+@keyframes srCount{0%{transform:scale(1)} 35%{transform:scale(1.28)} 100%{transform:scale(1)}}
+.remain.tick{animation:srCount 320ms ease-out 1;}
 .portrait{position:relative; width:var(--av); height:var(--av);
   border-radius:calc(var(--av) * .25); overflow:hidden; background:#fff;}
 .portrait svg{width:100%; height:100%; display:block;}
@@ -413,12 +423,18 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
     <div class="railtop">
       <div class="side me" id="sideMe">
         <div class="hearts" id="heartsMe"></div>
-        <div class="portrait" id="avMe"><span class="xmark" aria-hidden="true"></span></div>
+        <div class="avrow">
+          <div class="portrait" id="avMe"><span class="xmark" aria-hidden="true"></span></div>
+          <span class="remain" id="remainMe">0</span>
+        </div>
         <span class="sidename" id="myName">You</span>
       </div>
       <div class="side op" id="sideOp">
         <div class="hearts" id="heartsOp"></div>
-        <div class="portrait" id="avRival"><span class="xmark" aria-hidden="true"></span></div>
+        <div class="avrow">
+          <div class="portrait" id="avRival"><span class="xmark" aria-hidden="true"></span></div>
+          <span class="remain" id="remainOp">0</span>
+        </div>
         <span class="sidename" id="rivalName">Rival</span>
       </div>
     </div>
@@ -791,6 +807,7 @@ function setupBoard(boardIndex){
     // ghost
     ghostFilled:0, ghostNext:0, ghostBurst:randInt(cfg.burstMin,cfg.burstMax),
     ghostLockUntil:0, ghostShownAt:-1, myShownAt:-1, myLockSeen:0,
+    remainMeShown:null, remainOpShown:null,   // cells-left counters
     // ghost counters, derived in loop() by watching ghostLockUntil so that
     // stepGhost() itself stays untouched
     ghostLockSeen:0, ghostMistakes:0, ghostLockouts:0, ghostTotalLockoutMs:0,
@@ -1021,6 +1038,18 @@ EMOTES.forEach(ch=>{
   $('emoteRow').appendChild(b);
 });
 
+/* Counts down as cells get filled. Ticks only when the number DROPS, so an undo
+   quietly puts it back without firing the animation. */
+function updateRemain(el, n, key){
+  const prev = S[key];
+  if(prev === n) return;
+  S[key] = n;
+  el.textContent = n;
+  if(prev !== null && n < prev){
+    el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+  }
+}
+
 /* keep the 34px tile on the bar rather than half-hanging off an end */
 function placeEmote(el,pct){
   const W = trackEl.clientWidth || 369;
@@ -1227,6 +1256,10 @@ function paintRail(){
   // emotes ride the leading edge of each fill
   placeEmote($('anchorMe'), myShown*50);
   placeEmote($('anchorOp'), 100 - opShown*50);
+  // cells left. Mine is exact; the rival's is derived from the *shown* progress
+  // so solo can't leak the ghost's real pace through the number.
+  updateRemain($('remainMe'), S.totalEmpty - myFilled, 'remainMeShown');
+  updateRemain($('remainOp'), Math.max(0, Math.round(S.totalEmpty*(1-opShown))), 'remainOpShown');
   // pop a portrait as its side gains ground
   if(opShown!==S.ghostShownAt){
     if(S.ghostShownAt>=0) popPortrait($('avRival'));
