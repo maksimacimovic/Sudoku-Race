@@ -903,7 +903,7 @@ function setupBoard(boardIndex){
     mistakes:0, lockouts:0, totalLockoutMs:0,
     // ghost
     ghostFilled:0, ghostNext:0, ghostBurst:randInt(cfg.burstMin,cfg.burstMax),
-    ghostLockUntil:0, ghostShownAt:-1, myShownAt:-1, myLockSeen:0,
+    ghostLockUntil:0, ghostShownAt:-1, myLockSeen:0,
     remainMeShown:null, remainOpShown:null,   // cells-left counters
     // ghost counters, derived in loop() by watching ghostLockUntil so that
     // stepGhost() itself stays untouched
@@ -1364,7 +1364,7 @@ function shakeSide(el){ el.classList.remove('shake'); void el.offsetWidth; el.cl
 function popPortrait(el){ el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
 function clearPenalties(){
   ['sideMe','sideOp'].forEach(id=>$(id).classList.remove('penalty','shake'));
-  ['avMe','avRival'].forEach(id=>$(id).classList.remove('pop'));
+  $('avRival').classList.remove('pop');
 }
 function paintPenalties(now){
   // Compare lockSTART, not the deadline: the deadline is reset to 0 on expiry and
@@ -1407,10 +1407,6 @@ function paintRail(){
   if(opShown!==S.ghostShownAt){
     if(S.ghostShownAt>=0) popPortrait($('avRival'));
     S.ghostShownAt=opShown;
-  }
-  if(myShown!==S.myShownAt){
-    if(S.myShownAt>=0) popPortrait($('avMe'));
-    S.myShownAt=myShown;
   }
 }
 
