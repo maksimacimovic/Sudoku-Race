@@ -441,7 +441,10 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .endwrap h2.lose{color:var(--danger);}
 .endwrap > p{margin:-8px 0 0; font:400 13px/1.4 var(--font); color:var(--fg-3);}
 
-.endgrid{display:flex; align-items:flex-end; justify-content:space-around; gap:10px;}
+/* margin-top leaves room for the winner's crown and glow, which overflow
+   upward out of the row */
+.endgrid{display:flex; align-items:flex-end; justify-content:space-around; gap:10px;
+  margin-top:18px;}
 .endside{display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0;}
 .endavwrap{position:relative; display:flex; align-items:flex-end; justify-content:center;}
 .endav{width:78px; height:78px; border-radius:20px; overflow:hidden; background:#fff;
@@ -1666,9 +1669,11 @@ function renderResults(iWon, reason){
   $('resTitle').textContent = iWon ? 'You win!' : opponentName+' wins';
   $('resTitle').className   = iWon ? 'win' : 'lose';
   $('btnBackToResults').hidden = true;
-  $('resSub').textContent   = reason || (iWon
-    ? 'Board complete. Nicely scanned.'
-    : 'They filled the last cell first.');
+  // A plain win needs no caption — "You win!" already says it. Losses and
+  // unusual wins keep their reason, since that carries real information.
+  const sub = reason || (iWon ? '' : 'They filled the last cell first.');
+  $('resSub').textContent = sub;
+  $('resSub').hidden = !sub;
 
   // the two portraits: winner enlarged, crowned and glowing
   if(game.mode==='solo') game.oppRecord = {w:record.l, l:record.w};
