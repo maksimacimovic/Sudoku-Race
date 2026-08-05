@@ -910,7 +910,8 @@ function renderCell(i){
   const set = S.notes[i];
   const showNotes = v===0 && S.puzzle[i]==='0' && set && set.size>0;
   nt.hidden = !showNotes;
-  if(showNotes) for(let n=1;n<=9;n++) nt.children[n-1].textContent = set.has(n) ? n : '';
+  // always rewrite, so a hidden container never keeps text that is no longer true
+  for(let n=1;n<=9;n++) nt.children[n-1].textContent = (showNotes && set.has(n)) ? n : '';
 }
 
 function syncNames(){
@@ -965,6 +966,22 @@ function select(i){
 
 function editable(i){ return S.puzzle[i]==='0' && S.grid[i]===0; }
 
+/* the 20 cells that share a row, column or box with i */
+function peersOf(i){
+  const r=(i/9)|0, c=i%9, out=[];
+  for(let k=0;k<9;k++){
+    const a=r*9+k, b=k*9+c;
+    if(a!==i) out.push(a);
+    if(b!==i) out.push(b);
+  }
+  const br=((r/3)|0)*3, bc=((c/3)|0)*3;
+  for(let dr=0;dr<3;dr++) for(let dc=0;dc<3;dc++){
+    const p=(br+dr)*9+(bc+dc);
+    if(p!==i && out.indexOf(p)<0) out.push(p);
+  }
+  return out;
+}
+
 function input(n){
   if(!S || S.over || !S.started || S.autoFilling || S.eliminated) return;
   if(performance.now() < S.lockUntil) return;            // locked out
@@ -986,7 +1003,13 @@ function input(n){
     const prevNotes=[...S.notes[i]];
     S.grid[i]=n;
     S.notes[i]=new Set();
-    S.history.push({t:'place', i, notes:prevNotes});
+    // n can no longer be a candidate anywhere it shares a row, column or box,
+    // so strip it from those peers. Remember which, so undo can put them back.
+    const cleared=[];
+    peersOf(i).forEach(p=>{
+      if(S.notes[p].has(n)){ S.notes[p].delete(n); cleared.push(p); renderCell(p); }
+    });
+    S.history.push({t:'place', i, notes:prevNotes, n, cleared});
     renderCell(i);
     paintSelection();
     updatePad();
@@ -1028,7 +1051,12 @@ function undo(){
   if(controlsBlocked()) return;
   const a=S.history.pop();
   if(!a) return;
-  if(a.t==='place'){ S.grid[a.i]=0; S.notes[a.i]=new Set(a.notes); }
+  if(a.t==='place'){
+    S.grid[a.i]=0;
+    S.notes[a.i]=new Set(a.notes);
+    // restore the candidates this placement swept out of its peers
+    (a.cleared||[]).forEach(p=>{ S.notes[p].add(a.n); renderCell(p); });
+  }
   else if(a.t==='note'){ const s=S.notes[a.i]; if(a.added) s.delete(a.n); else s.add(a.n); }
   else if(a.t==='erase'){ S.grid[a.i]=a.digit; S.notes[a.i]=new Set(a.notes); }
   renderCell(a.i); paintSelection(); updatePad(); syncControls(); netProgress();
