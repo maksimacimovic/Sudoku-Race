@@ -311,6 +311,12 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .drow label{width:148px; color:var(--fg-4);}
 .drow input[type=range]{flex:1; accent-color:var(--teal-700);}
 .drow .val{width:58px; text-align:right; color:var(--fg-1); font-variant-numeric:tabular-nums;}
+.devbtn{flex:1; border:1px solid var(--border-soft); background:var(--card);
+  color:var(--teal-700); border-radius:var(--r-sm); padding:8px 0;
+  font:700 12px/1 var(--font); cursor:pointer;}
+.devbtn:active{transform:translateY(1px);}
+.devbtn:disabled{color:var(--fg-5); background:var(--press); border-color:var(--press);
+  cursor:default; transform:none;}
 
 /* ---------- shared button styles (overlay + result card) ---------- */
 .btn{width:100%; border:none; border-radius:var(--r-md); padding:15px; cursor:pointer;
@@ -520,6 +526,10 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 <div id="debug">
     <div class="dbghead"><span>Debug panel</span>
       <button class="dbgclose" id="dbgClose" aria-label="Close debug panel">&times;</button>
+    </div>
+    <div class="drow"><label>Force an ending</label>
+      <button class="devbtn" id="btnAutoWin">Auto win</button>
+      <button class="devbtn" id="btnAutoLose">Auto lose</button>
     </div>
     <div class="drow"><label>Lockout duration (ms)</label><input type="range" id="d_lockout" min="500" max="10000" step="250" value="5000"><span class="val" id="v_lockout">5000</span></div>
     <div class="drow"><label>Blur amount (px)</label><input type="range" id="d_blur" min="0" max="20" step="1" value="8"><span class="val" id="v_blur">8</span></div>
@@ -1093,6 +1103,7 @@ function syncControls(){
   $('btnErase').disabled = !S || locked;
   $('btnNotes').disabled = !S || locked;
   $('btnEmotes').disabled = !S;      // usable even while locked out
+  syncDevButtons();
 }
 $('btnUndo').addEventListener('click', undo);
 $('btnErase').addEventListener('click', erase);
@@ -1461,7 +1472,7 @@ function revealRemaining(done){
 }
 
 function showResults(won, reason){
-  paintRail(); clearPenalties(); endLockout();
+  paintRail(); clearPenalties(); endLockout(); syncDevButtons();
   renderResults(won, reason);
   $('result').classList.add('on');
 }
@@ -1922,7 +1933,32 @@ $('btnQuitStay').addEventListener('click', hideConfirm);
 $('btnQuitYes').addEventListener('click', quitToMenu);
 
 /* ---------- debug panel ---------- */
-$('dbgToggle').addEventListener('click',()=>$('debug').classList.toggle('on'));
+/* Dev shortcuts for the two endings. Single player only — in multiplayer the
+   outcome has to come from the other client, so forcing it locally would just
+   desync the two boards. */
+function syncDevButtons(){
+  const live = !!S && S.started && !S.over && game.mode==='solo';
+  $('btnAutoWin').disabled  = !live;
+  $('btnAutoLose').disabled = !live;
+}
+function autoWin(){
+  if(!S || !S.started || S.over || game.mode!=='solo') return;
+  for(let i=0;i<81;i++) if(S.puzzle[i]==='0' && S.grid[i]===0){
+    S.grid[i]=S.solution[i]; S.notes[i]=new Set(); renderCell(i);
+  }
+  updatePad(); paintRail();
+  playerFinished();                 // crown hop, then the card
+}
+function autoLose(){
+  if(!S || !S.started || S.over || game.mode!=='solo') return;
+  S.ghostFilled = S.totalEmpty;
+  paintRail();
+  opponentFinished();               // red reveal, then the card
+}
+$('btnAutoWin').addEventListener('click', autoWin);
+$('btnAutoLose').addEventListener('click', autoLose);
+
+$('dbgToggle').addEventListener('click',()=>{ syncDevButtons(); $('debug').classList.toggle('on'); });
 $('dbgClose').addEventListener('click',()=>$('debug').classList.remove('on'));
 /* #btnSettings is intentionally inert — placeholder for a real settings screen */
 function bind(id,key,fmt,post){
