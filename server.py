@@ -13,8 +13,8 @@ Environment:      PORT (default 8787), HOST (default 0.0.0.0)
 Protocol (JSON text frames)
 ---------------------------
 client -> server
-  {"t":"create",   "name":str, "difficulty":str, "poolSize":int}
-  {"t":"join",     "name":str, "code":str, "poolSize":int}
+  {"t":"create",   "name":str, "difficulty":str, "poolSize":int, "record":{"w":int,"l":int}}
+  {"t":"join",     "name":str, "code":str, "poolSize":int, "record":{"w":int,"l":int}}
   {"t":"progress", "filled":int}
   {"t":"lockout",  "ms":int}
   {"t":"finished", "ms":int, "mistakes":int, "lockouts":int, "lockedMs":int}
@@ -24,7 +24,8 @@ client -> server
 
 server -> client
   {"t":"created",  "code":str}
-  {"t":"begin",    "difficulty":str, "board":int, "opponent":str}
+  {"t":"begin",    "difficulty":str, "board":int, "opponent":str,
+                   "oppRecord":{"w":int,"l":int}}
   {"t":"progress", "filled":int}          # mirrored from the other player
   {"t":"lockout",  "ms":int}
   {"t":"finished", "ms":int, "mistakes":int, "lockouts":int, "lockedMs":int}
@@ -48,6 +49,16 @@ RELAYED = {"progress", "lockout", "finished", "emote"}
 # code -> {"players": [player, ...], "difficulty": str, "poolSize": int,
 #          "board": int|None, "rematch": {id: bool}}
 rooms = {}
+
+
+def clean_record(raw):
+    """Only w/l integers cross the wire; anything else becomes a zero record."""
+    if not isinstance(raw, dict):
+        return {"w": 0, "l": 0}
+    try:
+        return {"w": max(0, int(raw.get("w", 0))), "l": max(0, int(raw.get("l", 0)))}
+    except (TypeError, ValueError):
+        return {"w": 0, "l": 0}
 
 
 def new_code():
@@ -80,6 +91,7 @@ async def do_create(player, msg):
         return await send(player, {"t": "error", "code": "already_in_room"})
     code = new_code()
     player["name"] = str(msg.get("name") or "Player")[:14]
+    player["record"] = clean_record(msg.get("record"))
     player["code"] = code
     rooms[code] = {
         "players": [player],
@@ -103,6 +115,7 @@ async def do_join(player, msg):
         return await send(player, {"t": "error", "code": "room_full"})
 
     player["name"] = str(msg.get("name") or "Player")[:14]
+    player["record"] = clean_record(msg.get("record"))
     player["code"] = code
     room["players"].append(player)
     # be defensive: if the two clients disagree on pool size, use the smaller
@@ -122,10 +135,10 @@ async def begin(code, board=None):
     room["board"] = board
     room["rematch"] = {}
     a, b = room["players"]
-    await send(a, {"t": "begin", "difficulty": room["difficulty"],
-                   "board": board, "opponent": b["name"]})
-    await send(b, {"t": "begin", "difficulty": room["difficulty"],
-                   "board": board, "opponent": a["name"]})
+    await send(a, {"t": "begin", "difficulty": room["difficulty"], "board": board,
+                   "opponent": b["name"], "oppRecord": b.get("record", {"w": 0, "l": 0})})
+    await send(b, {"t": "begin", "difficulty": room["difficulty"], "board": board,
+                   "opponent": a["name"], "oppRecord": a.get("record", {"w": 0, "l": 0})})
     print(f"[room {code}] begin board={board} diff={room['difficulty']}", flush=True)
 
 
@@ -173,7 +186,7 @@ async def do_leave(player):
 
 
 async def handler(ws):
-    player = {"ws": ws, "name": "?", "code": None}
+    player = {"ws": ws, "name": "?", "code": None, "record": {"w": 0, "l": 0}}
     try:
         async for raw in ws:
             try:

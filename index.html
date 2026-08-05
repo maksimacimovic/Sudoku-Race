@@ -392,9 +392,28 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 @keyframes srCd{0%{transform:scale(.55);opacity:0}30%{transform:scale(1);opacity:1}
   100%{transform:scale(1.05);opacity:.9}}
 .cdnum.tick{animation:srCd .95s ease-out 1 both;}
-.vsrow{display:flex; align-items:center; justify-content:center; gap:12px;
-  font:700 13px/1 var(--font); color:var(--fg-3);}
-.vsrow .vs{font:400 11px/1 var(--font); color:var(--fg-5); letter-spacing:.08em;}
+/* pre-match stare-off */
+.vsgrid{display:flex; align-items:center; justify-content:space-between; gap:8px;
+  width:100%; margin-bottom:4px;}
+.vsside{display:flex; flex-direction:column; align-items:center; gap:6px;
+  flex:1; min-width:0;}
+.vsav{width:84px; height:84px; border-radius:21px; overflow:hidden; background:#fff;}
+.vsav svg{width:100%; height:100%; display:block;}
+.vsside.me .vsav{box-shadow:0 0 0 3px var(--teal-700);}
+.vsside.op .vsav{box-shadow:0 0 0 3px var(--danger);}
+.vsname{font:700 15px/1.2 var(--font); max-width:100%; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;}
+.vsside.me .vsname{color:var(--teal-700);}
+.vsside.op .vsname{color:var(--danger);}
+.vsrec{font:400 12px/1 var(--font); color:var(--fg-4); font-variant-numeric:tabular-nums;}
+.vsmid{display:flex; flex-direction:column; align-items:center; gap:5px; flex:none;}
+.vsvs{font:700 20px/1 var(--font); color:var(--fg-5); letter-spacing:.06em;}
+.vsdiff{font:700 10px/1 var(--font); text-transform:uppercase; letter-spacing:.06em;
+  color:var(--teal-700);}
+@keyframes srVsInL{from{opacity:0; transform:translateX(-44px)} to{opacity:1; transform:none}}
+@keyframes srVsInR{from{opacity:0; transform:translateX(44px)}  to{opacity:1; transform:none}}
+.vsside.me{animation:srVsInL 420ms cubic-bezier(.2,1.15,.3,1) 1 both;}
+.vsside.op{animation:srVsInR 420ms cubic-bezier(.2,1.15,.3,1) 1 both;}
 
 /* ---------- result + quit confirmation ---------- */
 #result,#confirm{position:fixed; inset:0; display:none; align-items:center; justify-content:center;
@@ -604,7 +623,22 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 
   <!-- ---------- 3-2-1 COUNTDOWN ---------- -->
   <section class="screen" data-screen="countdown">
-    <div class="vsrow"><span id="cdMe">You</span><span class="vs">VS</span><span id="cdOp">Rival</span></div>
+    <div class="vsgrid">
+      <div class="vsside me">
+        <div class="vsav" id="vsAvMe"></div>
+        <span class="vsname" id="vsNameMe">You</span>
+        <span class="vsrec" id="vsRecMe">0W · 0L</span>
+      </div>
+      <div class="vsmid">
+        <span class="vsvs">VS</span>
+        <span class="vsdiff" id="vsDiff">Easy</span>
+      </div>
+      <div class="vsside op">
+        <div class="vsav" id="vsAvOp"></div>
+        <span class="vsname" id="vsNameOp">Rival</span>
+        <span class="vsrec" id="vsRecOp">0W · 0L</span>
+      </div>
+    </div>
     <div class="cdnum" id="cdNum">3</div>
     <p class="sub">Get ready…</p>
   </section>
@@ -743,7 +777,8 @@ const game = {
   difficulty: 'easy',    // easy is the default selection
   boardIndex: 0,
   roomCode: null,
-  isHost: false
+  isHost: false,
+  oppRecord: {w:0, l:0}
 };
 
 /* ---------- Sudoku solver (backtracking) ---------- */
@@ -792,6 +827,9 @@ function avatarSVG(skin,hair,shirt){
 /* insert before the .xmark overlay rather than replacing it */
 $('avRival').insertAdjacentHTML('afterbegin', avatarSVG('#E8B78F','#4A3B33','#6E7A88'));
 $('avMe').insertAdjacentHTML('afterbegin', avatarSVG('#F0C7A2','#2E3A46','#1E6E8C'));
+/* same faces on the pre-match stare-off */
+$('vsAvOp').innerHTML = avatarSVG('#E8B78F','#4A3B33','#6E7A88');
+$('vsAvMe').innerHTML = avatarSVG('#F0C7A2','#2E3A46','#1E6E8C');
 
 /* countdown ring geometry — r=26 in the SVG's 64×64 user space */
 const RING_C = 2 * Math.PI * 26;
@@ -1479,6 +1517,8 @@ function revealRemaining(done){
 
 function showResults(won, reason){
   paintRail(); clearPenalties(); endLockout(); syncDevButtons();
+  if(won) record.w++; else record.l++;
+  saveRecord();
   renderResults(won, reason);
   $('result').classList.add('on');
 }
@@ -1570,6 +1610,20 @@ function hideResult(){ $('result').classList.remove('on'); }
    START SCREEN / LOBBY
    ============================================================ */
 const NAME_KEY = 'sudokuRace.playerName';
+const REC_KEY  = 'sudokuRace.record';
+
+/* Your win/loss tally, kept across sessions. In solo the ghost's record is the
+   mirror of yours — it really has beaten you exactly as often as you've lost —
+   so nothing has to be invented. In multiplayer the opponent sends theirs. */
+let record = {w:0, l:0};
+function loadRecord(){
+  try{ const r=JSON.parse(localStorage.getItem(REC_KEY)||'{}'); return {w:r.w|0, l:r.l|0}; }
+  catch(e){ return {w:0, l:0}; }
+}
+function saveRecord(){
+  try{ localStorage.setItem(REC_KEY, JSON.stringify(record)); }catch(e){}
+}
+function fmtRec(r){ return (r&&r.w|0)+'W · '+(r&&r.l|0)+'L'; }
 /* Room codes: 4 chars, no O/0 and no I/1 so they can be read aloud.
    The server mints them; this alphabet is only used to validate typed input. */
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -1623,12 +1677,23 @@ $('codeInput').addEventListener('input', refreshCodeState);
 /* ---------- countdown ---------- */
 let cdTimer=null;
 function stopCountdown(){ if(cdTimer){ clearInterval(cdTimer); cdTimer=null; } }
+/* paints the matchup, then replays the slide-in so it lands fresh every time */
+function paintMatchup(){
+  $('vsNameMe').textContent = playerName;
+  $('vsNameOp').textContent = opponentName;
+  $('vsRecMe').textContent  = fmtRec(record);
+  $('vsRecOp').textContent  = fmtRec(game.oppRecord);
+  $('vsDiff').textContent   = DIFF_LABEL[game.difficulty] || '';
+  ['me','op'].forEach(k=>{
+    const el=document.querySelector('.vsside.'+k);
+    el.style.animation='none'; void el.offsetWidth; el.style.animation='';
+  });
+}
 function runCountdown(done){
   stopCountdown();
   let n=3;
   const el=$('cdNum');
-  $('cdMe').textContent = playerName;
-  $('cdOp').textContent = opponentName;
+  paintMatchup();
   const paint=()=>{
     el.textContent=n;
     el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
@@ -1656,9 +1721,11 @@ function startSolo(boardIndex){
   game.roomCode = null;
   game.isHost = false;
   opponentName = GHOST_NAME;
+  // the ghost's tally is the mirror of yours
+  game.oppRecord = {w:record.l, l:record.w};
   setupBoard(boardIndex);            // undefined -> next board from the rotation
-  hideOverlay();
-  startRace();                    // solo starts immediately, no countdown
+  showOverlay('countdown');
+  runCountdown(()=>{ hideOverlay(); startRace(); });
 }
 
 $('btnSolo').addEventListener('click',()=>{
@@ -1749,6 +1816,7 @@ function onNetMessage(m){
 
     case 'begin': {                          // both players present
       opponentName = m.opponent || 'Opponent';
+      game.oppRecord = {w:(m.oppRecord&&m.oppRecord.w)|0, l:(m.oppRecord&&m.oppRecord.l)|0};
       game.difficulty = m.difficulty || game.difficulty;
       hideResult();
       setupBoard(m.board);                   // server-chosen: both build the same grid
@@ -1856,7 +1924,7 @@ $('btnCreate').addEventListener('click',async ()=>{
   try{
     await net.open();
     net.send({t:'create', name:playerName, difficulty:game.difficulty,
-              poolSize:activePool().length});
+              poolSize:activePool().length, record});
   }catch(e){
     $('codeErr').textContent='Could not reach the server.';
     showScreen('mp'); game.mode='solo';
@@ -1877,7 +1945,7 @@ $('btnJoin').addEventListener('click',async ()=>{
   showScreen('waiting');
   try{
     await net.open();
-    net.send({t:'join', code, name:playerName, poolSize:activePool().length});
+    net.send({t:'join', code, name:playerName, poolSize:activePool().length, record});
   }catch(e){
     $('codeErr').textContent='Could not reach the server.';
     showScreen('mp'); game.mode='solo';
@@ -1900,8 +1968,10 @@ function rematch(boardIndex){
     return;
   }
   hideResult();
+  game.oppRecord = {w:record.l, l:record.w};
   setupBoard(boardIndex);
-  startRace();
+  showOverlay('countdown');
+  runCountdown(()=>{ hideOverlay(); startRace(); });
 }
 $('btnRematchSame').addEventListener('click',()=>rematch(game.boardIndex));
 /* undefined -> next board from the difficulty's rotation */
@@ -1998,6 +2068,7 @@ window.addEventListener('keydown',e=>{
    but don't start the race until a mode is chosen. */
 document.documentElement.style.setProperty('--blur', cfg.blur+'px');
 setupBoard(0);
+record = loadRecord();
 $('nameInput').value = loadStoredName();
 refreshNameState();
 showOverlay('home');
