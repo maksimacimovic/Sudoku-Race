@@ -60,8 +60,10 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .iconbtn svg{width:19px; height:19px; fill:currentColor;}
 .iconbtn:active{transform:scale(.94);}
 .iconbtn.subtle{background:none; color:var(--border);}   /* dev control, kept quiet */
+.iconbtn.txt{font:700 12px/1 var(--font);}
+.iconbtn.on{background:var(--teal-700); color:#fff;}
 /* left/right header clusters, equal min-width so the timer stays centred */
-.hgroup{display:flex; align-items:center; gap:8px; min-width:72px;}
+.hgroup{display:flex; align-items:center; gap:8px; min-width:112px;}
 .hgroup.right{justify-content:flex-end;}
 .hstack{display:flex; flex-direction:column; align-items:center; gap:3px;}
 .hstack .meta{font:400 9px/1 var(--font); letter-spacing:.08em; color:var(--fg-5);}
@@ -193,12 +195,17 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 /* ---------- number pad ---------- */
 .pad{display:flex; gap:4px; justify-content:space-between; flex:none;
   padding-top:var(--pad-top); width:var(--board); align-self:center;}
-.num{flex:1; height:var(--pad-h); border:none; padding:0; border-radius:var(--r-sm);
+.num{position:relative; flex:1; height:var(--pad-h); border:none; padding:0;
+  border-radius:var(--r-sm);
   font:700 25px/1 var(--font); background:var(--hl-hard); color:var(--teal-700);
   box-shadow:var(--pad-lip); cursor:pointer;}
 .num:active{transform:translateY(4px); box-shadow:none;}
 .num.done,.num[disabled]{background:var(--press); color:var(--fg-5); box-shadow:none;
   pointer-events:none; transform:none;}
+/* which digit is armed in number-first mode */
+.num.picked::before{content:""; position:absolute; top:5px; left:50%;
+  transform:translateX(-50%); width:55%; height:3px; border-radius:2px;
+  background:var(--teal-700);}
 
 /* ---------- action row (prototype controls, design's icon+label idiom) ---------- */
 /* Four equal columns: the tool row takes three shares (one per tool) and the
@@ -404,6 +411,9 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
       <span class="timer" id="clock">0:00</span>
     </div>
     <div class="hgroup right">
+      <!-- number-first input toggle -->
+      <button class="iconbtn txt" id="btnNF" aria-pressed="false"
+              aria-label="Number-first input">NF</button>
       <!-- dev tuning: opens a fixed overlay, so it can never affect the board layout -->
       <button class="iconbtn subtle" id="dbgToggle" aria-label="Debug panel">
         <svg viewBox="0 0 24 24"><path d="M3 7h8v2H3V7zm10 0h8v2h-8V7zM3 15h5v2H3v-2zm7 0h11v2H10v-2zM9 5h2v6H9V5zm5 8h2v6h-2v-6z"/></svg>
@@ -762,11 +772,37 @@ $('avMe').insertAdjacentHTML('afterbegin', avatarSVG('#F0C7A2','#2E3A46','#1E6E8
 const RING_C = 2 * Math.PI * 26;
 $('lockring').style.strokeDasharray = RING_C.toFixed(2);
 
+/* ---------- number-first input ----------
+   Off: pick a cell, then a digit (the original order).
+   On:  arm a digit, then tap cells to drop it in. The armed digit is marked with
+   a small dash above it and stays armed so a run of the same digit is quick.
+   It's an input preference, so it survives a new board rather than resetting. */
+let numberFirst = false;
+let pickedNum = 0;
+
+function padPress(n){
+  if(numberFirst) pickNumber(n); else input(n);
+}
+function pickNumber(n){
+  if(!S || S.over || !S.started || S.autoFilling || S.eliminated) return;
+  if(performance.now() < S.lockUntil) return;
+  pickedNum = (pickedNum === n) ? 0 : n;      // tapping the armed digit disarms it
+  updatePad();
+}
+function toggleNF(){
+  numberFirst = !numberFirst;
+  if(!numberFirst) pickedNum = 0;
+  $('btnNF').classList.toggle('on', numberFirst);
+  $('btnNF').setAttribute('aria-pressed', numberFirst ? 'true' : 'false');
+  if(S) updatePad();
+}
+$('btnNF').addEventListener('click', toggleNF);
+
 /* build number pad once */
 for(let n=1;n<=9;n++){
   const b=document.createElement('button');
   b.className='num'; b.textContent=n; b.dataset.n=n;
-  b.addEventListener('click',()=>input(n));
+  b.addEventListener('click',()=>padPress(n));
   padEl.appendChild(b);
 }
 
@@ -923,6 +959,8 @@ function select(i){
   if(S.over) return;
   S.sel=i;
   paintSelection();
+  // number-first: the tap itself is the placement
+  if(numberFirst && pickedNum && editable(i)) input(pickedNum);
 }
 
 function editable(i){ return S.puzzle[i]==='0' && S.grid[i]===0; }
@@ -1151,10 +1189,12 @@ function updatePad(){
   const counts=Array(10).fill(0);
   for(let i=0;i<81;i++) if(S.grid[i]!==0) counts[S.grid[i]]++;
   const locked = performance.now() < S.lockUntil;
+  if(pickedNum && counts[pickedNum]>=9) pickedNum = 0;   // nothing left to place
   padEl.querySelectorAll('.num').forEach(b=>{
     const n=+b.dataset.n;
     b.classList.toggle('done', counts[n]>=9);
     b.disabled = locked;
+    b.classList.toggle('picked', numberFirst && pickedNum===n);
   });
   syncControls();      // called on lockout start and expiry, so it stays in step
 }
@@ -1864,7 +1904,7 @@ window.addEventListener('resize',()=>{ if(S) paintRail(); });
 
 /* keyboard support (desktop testing) */
 window.addEventListener('keydown',e=>{
-  if(e.key>='1'&&e.key<='9') input(+e.key);
+  if(e.key>='1'&&e.key<='9') padPress(+e.key);
 });
 
 /* ---------- go ----------
