@@ -33,11 +33,12 @@
   --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   /* vertical chrome around the board — keep in sync with --chrome below */
   --pad-h:52px; --pad-top:14px; --disc:48px; --act-top:18px; --disc-font:19px;
-  --av:64px; --av-ring:2px;        /* portrait size + its coloured ring */
+  --av:100px; --av-ring:3px;       /* portrait size + its coloured ring */
   --crown:34px;                    /* the prize above the centre of the bar */
-  --lives-h:18px;                  /* heart size, above each portrait */
+  /* three hearts + two gaps span exactly the portrait's width */
+  --lives-h:calc((var(--av) - 8px) / 3);
   --rail-gap:22px;                 /* bar -> board breathing room */
-  --chrome:380px;                  /* measured from the DOM (378) + 2px slack */
+  --chrome:417px;                  /* measured from the DOM (415) + 2px slack */
   /* board geometry — 369px at design size; shrinks to fit narrow OR short screens
      so the whole layout always fits the viewport without scrolling */
   --board:min(369px, calc(100vw - 24px),
@@ -81,7 +82,7 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 /* portrait + cells-remaining, the number turned toward the centre on each side */
 .avrow{display:flex; align-items:center; gap:8px;}
 .op .avrow{flex-direction:row-reverse;}
-.remain{font:700 calc(var(--av) * .34)/1 var(--font); font-variant-numeric:tabular-nums;
+.remain{font:700 min(calc(var(--av) * .34), 26px)/1 var(--font); font-variant-numeric:tabular-nums;
   min-width:1.5em; text-align:center;}
 .me .remain{color:var(--teal-700);}
 .op .remain{color:var(--danger);}
@@ -101,7 +102,7 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .op .sidename{color:var(--danger);}
 .locked .me .sidename{color:var(--teal-300);}
 /* the rail is board-width, so the bar is exactly as long as the board */
-.barwrap{position:relative; margin-top:22px;}
+.barwrap{position:relative; margin-top:10px;}
 /* sits above the centre of the bar, dipping 3px into it */
 .crown{position:absolute; left:50%; top:calc(3px - var(--crown));
   transform:translateX(-50%); width:var(--crown); height:var(--crown);}
@@ -284,11 +285,16 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 @media (max-height:750px){
   :root{
     --pad-h:46px; --pad-top:12px; --disc:40px; --act-top:14px; --disc-font:16px;
-    --av:44px; --av-ring:2px; --crown:26px;
-    --lives-h:16px; --rail-gap:12px;
-    --chrome:328px;   /* measured 326 + 2px slack */
+    --av:66px; --av-ring:2px; --crown:26px;
+    --rail-gap:12px;
+    --chrome:342px;   /* measured 340 + 2px slack */
   }
 }
+
+/* narrow screens: the two side columns plus the crown won't fit at the taller
+   avatar, so trim it. Keyed on width, since this is a horizontal problem, and
+   placed after the height query so it wins on phones that match both. */
+@media (max-width:360px){ :root{ --av:54px; } }
 
 /* ---------- debug (contents unchanged) ----------
    FIXED and outside .wrap, so opening it can never change --chrome/--board or
