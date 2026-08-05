@@ -33,11 +33,10 @@
   --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   /* vertical chrome around the board — keep in sync with --chrome below */
   --pad-h:52px; --pad-top:14px; --disc:48px; --act-top:18px; --disc-font:19px;
-  --auto-h:48px; --auto-top:10px;  /* reserved Auto-complete slot */
   --av:64px; --av-ring:2px;        /* portrait size + its coloured ring */
   --lives-h:18px;                  /* heart size, above each portrait */
   --rail-gap:22px;                 /* bar -> board breathing room */
-  --chrome:438px;                  /* measured from the DOM (436) + 2px slack */
+  --chrome:380px;                  /* measured from the DOM (378) + 2px slack */
   /* board geometry — 369px at design size; shrinks to fit narrow OR short screens
      so the whole layout always fits the viewport without scrolling */
   --board:min(369px, calc(100vw - 24px),
@@ -234,11 +233,13 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   86%{opacity:1; transform:scale(1)}
   100%{opacity:0; transform:scale(.9)}}
 .emotepop.show{animation:srEmotePop 2600ms ease-out 1 both;}
-/* Auto complete sits in a slot whose height is always reserved (and counted in
-   --chrome), so showing or hiding the button never moves the board. */
-.autoslot{flex:none; height:var(--auto-h); margin-top:var(--auto-top);
-  display:flex; align-items:center; padding:0 12px;}
-.autobtn{height:var(--auto-h); padding:0; font-size:15px;}
+/* Auto complete lives between the two counters. The portrait row is taller than
+   the button, so it can appear without changing any height. */
+.railtop .autobtn{width:auto; align-self:center; height:auto; margin:0 8px;
+  padding:9px 11px; font:700 12px/1 var(--font); white-space:nowrap;}
+@media (max-width:360px){
+  .railtop .autobtn{padding:8px 7px; font-size:11px; margin:0 4px;}
+}
 .act{flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
   background:none; border:none; padding:0; cursor:pointer;}
 .act .disc{position:relative; width:var(--disc); height:var(--disc); border-radius:var(--r-pill);
@@ -264,10 +265,9 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 @media (max-height:750px){
   :root{
     --pad-h:46px; --pad-top:12px; --disc:40px; --act-top:14px; --disc-font:16px;
-    --auto-h:40px; --auto-top:8px;
     --av:44px; --av-ring:2px;
     --lives-h:16px; --rail-gap:12px;
-    --chrome:376px;   /* measured 374 + 2px slack */
+    --chrome:328px;   /* measured 326 + 2px slack */
   }
 }
 
@@ -429,6 +429,9 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
         </div>
         <span class="sidename" id="myName">You</span>
       </div>
+      <!-- appears in the gap between the counters; the row is taller than the
+           button, so showing it shifts nothing -->
+      <button class="btn secondary autobtn" id="btnAutoComplete" hidden>Auto complete</button>
       <div class="side op" id="sideOp">
         <div class="hearts" id="heartsOp"></div>
         <div class="avrow">
@@ -491,11 +494,6 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
     </button>
   </div>
 
-  <!-- Auto complete lives in its own always-reserved slot below the action row,
-       so it can appear and disappear without moving anything above it. -->
-  <div class="autoslot">
-    <button class="btn secondary autobtn" id="btnAutoComplete" hidden>Auto complete</button>
-  </div>
 
 </div>
 
@@ -1161,25 +1159,38 @@ function updatePad(){
   syncControls();      // called on lockout start and expiry, so it stays in step
 }
 
-/* ---------- ghost opponent ---------- */
+/* ---------- ghost opponent ----------
+   Three human traits on top of the original burst/pause rhythm. cfg.ghostSpc is
+   still the baseline pace, so every debug slider means what it always meant.
+     1. It accelerates as the grid fills — fewer candidates left to weigh.
+     2. Most pauses are a beat; now and then it properly stares at the board.
+     3. It plays more carefully when its hearts are nearly gone. */
 function stepGhost(now){
   if(S.ghostFilled>=S.totalEmpty) return;
   if(now < S.ghostLockUntil) return;
   if(now < S.ghostNext) return;
-  // resolve one ghost action
-  if(Math.random() < cfg.ghostMistake){
+
+  const prog = S.totalEmpty ? S.ghostFilled/S.totalEmpty : 0;
+  const pace = cfg.ghostSpc * 1000 * (1 - 0.45*prog);   // up to 45% quicker by the end
+
+  // fewer hearts left -> takes fewer risks, the way a person would
+  const care = S.ghostLivesLeft<=1 ? 0.35 : (S.ghostLivesLeft===2 ? 0.7 : 1);
+  if(Math.random() < cfg.ghostMistake * care){
     // ghost makes a mistake -> ghost eats a lockout, no progress
     S.ghostLockUntil = now + cfg.lockoutMs;
-    S.ghostNext = S.ghostLockUntil + cfg.ghostSpc*1000*(0.3+Math.random()*0.4);
+    // shaken: a beat longer than usual before trying again
+    S.ghostNext = S.ghostLockUntil + pace*(0.6+Math.random()*0.6);
     return;
   }
+
   S.ghostFilled++;
   S.ghostBurst--;
   if(S.ghostBurst<=0){
     S.ghostBurst = randInt(cfg.burstMin,cfg.burstMax);
-    S.ghostNext = now + cfg.ghostSpc*1000*(1.5+Math.random()*1.5);   // pause between bursts
+    const stare = Math.random() < 0.18;                 // occasional long think
+    S.ghostNext = now + pace*(stare ? (3.2+Math.random()*2.2) : (1.2+Math.random()*1.1));
   } else {
-    S.ghostNext = now + cfg.ghostSpc*1000*(0.3+Math.random()*0.4);   // quick within burst
+    S.ghostNext = now + pace*(0.30+Math.random()*0.45); // quick within a burst
   }
 }
 
@@ -1405,7 +1416,7 @@ function playerFinished(){
 
 /* ---------- auto complete ---------- */
 function showAutoComplete(on){
-  $('btnAutoComplete').hidden = !on;   // its slot stays reserved either way
+  $('btnAutoComplete').hidden = !on;   // the row is taller than it, so nothing shifts
 }
 let autoTimer=null;
 function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
