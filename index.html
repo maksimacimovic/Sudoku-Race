@@ -817,11 +817,21 @@ const BOARDS = {
   ]
 };
 /* ---------- multiplayer server ----------
-   Point this at your room server. Leave it as-is for local testing (run
-   `py -3 server.py` on the same machine); set it to your wss:// host once
-   deployed. If the page is served over https the URL must be wss://, or the
-   browser will block the connection as mixed content. */
-const SERVER_URL = 'wss://sudoku-race-qgwr.onrender.com';
+   Resolved from where the page is being served, so one file works everywhere and
+   nothing needs editing:
+     • opened as a file, or served from localhost / a 192.168.x / 10.x / 172.16-31.x
+       address  ->  a room server on this machine, port 8787
+     • served from anywhere else (a real host)  ->  the deployed server
+   A page on http may open ws://; a page on https must use wss:// or the browser
+   blocks it as mixed content. */
+const DEPLOYED_SERVER = 'wss://sudoku-race-qgwr.onrender.com';
+const SERVER_URL = (function(){
+  const h = location.hostname;
+  if(location.protocol === 'file:') return 'ws://127.0.0.1:8787';
+  const lan = h === 'localhost' || h === '127.0.0.1'
+    || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h);
+  return lan ? 'ws://' + h + ':8787' : DEPLOYED_SERVER;
+})();
 
 const DIFFICULTIES = ['easy','medium','hard'];
 const DIFF_LABEL = { easy:'Easy', medium:'Medium', hard:'Hard' };
