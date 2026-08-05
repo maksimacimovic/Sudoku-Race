@@ -415,29 +415,79 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .vsside.me{animation:srVsInL 420ms cubic-bezier(.2,1.15,.3,1) 1 both;}
 .vsside.op{animation:srVsInR 420ms cubic-bezier(.2,1.15,.3,1) 1 both;}
 
-/* ---------- result + quit confirmation ---------- */
-#result,#confirm{position:fixed; inset:0; display:none; align-items:center; justify-content:center;
-  background:rgba(10,10,10,.45); padding:20px;}
-#result{z-index:20;}
-#confirm{z-index:25;}                 /* above the board, below the start overlay */
-#result.on,#confirm.on{display:flex;}
+/* ---------- quit confirmation (still a small dialog) ---------- */
+#confirm{position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background:rgba(10,10,10,.45); z-index:25; padding:20px;}
+#confirm.on{display:flex;}
 .card{background:var(--card); border-radius:var(--r-xl); padding:24px 20px; text-align:center;
   max-width:330px; width:100%; max-height:calc(100dvh - 40px); overflow-y:auto;}
 .card h2{margin:0 0 4px; font:700 30px/1 var(--font); color:var(--fg-1);}
-.card h2.lose{color:var(--danger);}
-.card h2.win{color:var(--teal-700);}
 .card p{margin:0 0 14px; font:400 13px/1.4 var(--font); color:var(--fg-3);}
-.scoreboard{width:100%; margin:0 0 16px; border-top:1px solid var(--border-soft);}
-.scoreboard .hdr,.scoreboard .row{display:grid; grid-template-columns:1fr 72px 72px; gap:6px;
-  align-items:center; padding:8px 0; border-bottom:1px solid var(--border-soft);}
-.scoreboard .hdr{font:700 11px/1.25 var(--font); text-transform:uppercase; letter-spacing:.03em;}
+.btnrow{display:flex; flex-direction:column; gap:8px;}
+
+/* ---------- end screen ----------
+   A screen in its own right rather than a dialog: it fades and lifts in over the
+   board, so the race doesn't end with something snapping into frame. */
+#result{position:fixed; inset:0; z-index:24; background:var(--bg);
+  display:flex; align-items:center; justify-content:center; overflow-y:auto;
+  padding:24px 20px calc(24px + env(safe-area-inset-bottom));
+  opacity:0; transform:translateY(16px); pointer-events:none;
+  transition:opacity 280ms ease, transform 280ms cubic-bezier(.2,.9,.3,1);}
+#result.on{opacity:1; transform:none; pointer-events:auto;}
+.endwrap{width:100%; max-width:340px; display:flex; flex-direction:column; gap:14px;
+  text-align:center;}
+.endwrap h2{margin:0; font:700 30px/1 var(--font); color:var(--fg-1);}
+.endwrap h2.win{color:var(--teal-700);}
+.endwrap h2.lose{color:var(--danger);}
+.endwrap > p{margin:-8px 0 0; font:400 13px/1.4 var(--font); color:var(--fg-3);}
+
+.endgrid{display:flex; align-items:flex-end; justify-content:space-around; gap:10px;}
+.endside{display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0;}
+.endavwrap{position:relative; display:flex; align-items:flex-end; justify-content:center;}
+.endav{width:78px; height:78px; border-radius:20px; overflow:hidden; background:#fff;
+  transition:width 220ms ease, height 220ms ease;}
+.endav svg{width:100%; height:100%; display:block;}
+.endside.me .endav{box-shadow:0 0 0 3px var(--teal-700);}
+.endside.op .endav{box-shadow:0 0 0 3px var(--danger);}
+.endname{font:700 15px/1.2 var(--font); max-width:120px; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;}
+.endside.me .endname{color:var(--teal-700);}
+.endside.op .endname{color:var(--danger);}
+.endrec{font:400 12px/1 var(--font); color:var(--fg-4); font-variant-numeric:tabular-nums;}
+.endcrown{position:absolute; left:50%; top:-26px; transform:translateX(-50%);
+  width:30px; height:30px; display:none;}
+
+/* the winner: larger, crowned, and quietly glowing */
+.endside.winner .endav{width:108px; height:108px; border-radius:27px;
+  animation:srEndShine 1900ms ease-in-out infinite;}
+.endside.winner .endcrown{display:block; animation:srEndCrown 1900ms ease-in-out infinite;}
+.endside.winner .endname{font-size:17px;}
+@keyframes srEndShine{
+  0%,100%{box-shadow:0 0 0 3px var(--rank-gold), 0 0 16px 3px rgba(255,177,0,.40)}
+  50%    {box-shadow:0 0 0 3px var(--rank-gold), 0 0 30px 9px rgba(255,177,0,.62)}}
+@keyframes srEndCrown{
+  0%,100%{transform:translateX(-50%) translateY(0)     scale(1)}
+  50%    {transform:translateX(-50%) translateY(-3px)  scale(1.08)}}
+.endside.loser{opacity:.72;}
+
+/* stat table under the portraits */
+.scoreboard{width:100%; border-top:1px solid var(--border-soft);}
+.scoreboard .hdr,.scoreboard .row{display:grid; grid-template-columns:1fr 72px 72px;
+  gap:6px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-soft);}
+.scoreboard .hdr{font:700 11px/1.25 var(--font); text-transform:uppercase;
+  letter-spacing:.03em;}
 .scoreboard span:nth-child(2),.scoreboard span:nth-child(3){text-align:right;
   font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis;}
 .scoreboard .hdr .me{color:var(--teal-700);}
-.scoreboard .hdr .op{color:var(--rival-ink);}
+.scoreboard .hdr .op{color:var(--danger);}
 .scoreboard .row{font:400 13px/1.2 var(--font); color:var(--fg-1);}
 .scoreboard .row span:first-child{text-align:left; color:var(--fg-4); font-size:12px;}
-.btnrow{display:flex; flex-direction:column; gap:8px;}
+
+.endbtns{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:2px;}
+.endbtns .btn{width:100%; padding:13px; font-size:15px;}
+.reviewback{position:fixed; left:50%; transform:translateX(-50%); z-index:26;
+  bottom:calc(16px + env(safe-area-inset-bottom)); width:auto; padding:12px 22px;
+  box-shadow:0 6px 20px rgba(10,10,10,.28);}
 </style>
 </head>
 <body>
@@ -658,10 +708,37 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 </div>
 
 <!-- ======================= RESULTS ======================= -->
+<!-- ======================= END SCREEN ======================= -->
 <div id="result">
-  <div class="card">
+  <div class="endwrap">
     <h2 id="resTitle">You win!</h2>
     <p id="resSub"></p>
+
+    <div class="endgrid">
+      <div class="endside me" id="endMe">
+        <div class="endavwrap">
+          <svg class="endcrown" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 8l4.2 3.2L12 4l5.8 7.2L22 8l-2 10H4L2 8z" fill="#FFB100"/>
+            <path d="M4 18h16l-.6 3H4.6L4 18z" fill="#FF8838"/>
+          </svg>
+          <div class="endav" id="endAvMe"></div>
+        </div>
+        <span class="endname" id="endNameMe">You</span>
+        <span class="endrec" id="endRecMe">0W · 0L</span>
+      </div>
+      <div class="endside op" id="endOp">
+        <div class="endavwrap">
+          <svg class="endcrown" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M2 8l4.2 3.2L12 4l5.8 7.2L22 8l-2 10H4L2 8z" fill="#FFB100"/>
+            <path d="M4 18h16l-.6 3H4.6L4 18z" fill="#FF8838"/>
+          </svg>
+          <div class="endav" id="endAvOp"></div>
+        </div>
+        <span class="endname" id="endNameOp">Rival</span>
+        <span class="endrec" id="endRecOp">0W · 0L</span>
+      </div>
+    </div>
+
     <div class="scoreboard">
       <div class="hdr"><span></span><span class="me" id="sbMe">You</span><span class="op" id="sbOp">Rival</span></div>
       <div class="row"><span>Finish time</span><span id="sbTimeMe">—</span><span id="sbTimeOp">—</span></div>
@@ -669,13 +746,17 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
       <div class="row"><span>Lockouts</span><span id="sbLockMe">0</span><span id="sbLockOp">0</span></div>
       <div class="row"><span>Locked total</span><span id="sbLmsMe">0s</span><span id="sbLmsOp">0s</span></div>
     </div>
-    <div class="btnrow">
-      <button class="btn primary" id="btnRematchSame">Rematch · same board</button>
-      <button class="btn secondary" id="btnRematchNew">Rematch · new board</button>
-      <button class="btn ghost" id="btnHome">Back to start</button>
+
+    <div class="endbtns">
+      <button class="btn secondary" id="btnEndBoard">Board</button>
+      <button class="btn primary"   id="btnRematchSame">Rematch</button>
+      <button class="btn secondary" id="btnEndAnalysis">Analysis</button>
+      <button class="btn ghost"     id="btnHome">Leave</button>
     </div>
   </div>
 </div>
+<!-- shown while reviewing the finished board -->
+<button class="btn primary reviewback" id="btnBackToResults" hidden>Results</button>
 
 <script>
 /* ============================================================
@@ -830,6 +911,8 @@ $('avMe').insertAdjacentHTML('afterbegin', avatarSVG('#F0C7A2','#2E3A46','#1E6E8
 /* same faces on the pre-match stare-off */
 $('vsAvOp').innerHTML = avatarSVG('#E8B78F','#4A3B33','#6E7A88');
 $('vsAvMe').innerHTML = avatarSVG('#F0C7A2','#2E3A46','#1E6E8C');
+$('endAvOp').innerHTML = avatarSVG('#E8B78F','#4A3B33','#6E7A88');
+$('endAvMe').innerHTML = avatarSVG('#F0C7A2','#2E3A46','#1E6E8C');
 
 /* countdown ring geometry — r=26 in the SVG's 64×64 user space */
 const RING_C = 2 * Math.PI * 26;
@@ -1582,9 +1665,21 @@ function renderResults(iWon, reason){
 
   $('resTitle').textContent = iWon ? 'You win!' : opponentName+' wins';
   $('resTitle').className   = iWon ? 'win' : 'lose';
+  $('btnBackToResults').hidden = true;
   $('resSub').textContent   = reason || (iWon
     ? 'Board complete. Nicely scanned.'
     : 'They filled the last cell first.');
+
+  // the two portraits: winner enlarged, crowned and glowing
+  if(game.mode==='solo') game.oppRecord = {w:record.l, l:record.w};
+  $('endNameMe').textContent = playerName;
+  $('endNameOp').textContent = opponentName;
+  $('endRecMe').textContent  = fmtRec(record);
+  $('endRecOp').textContent  = fmtRec(game.oppRecord);
+  $('endMe').classList.toggle('winner',  iWon);
+  $('endMe').classList.toggle('loser',  !iWon);
+  $('endOp').classList.toggle('winner', !iWon);
+  $('endOp').classList.toggle('loser',   iWon);
 
   $('sbMe').textContent = playerName;
   $('sbOp').textContent = opponentName;
@@ -1600,7 +1695,7 @@ function renderResults(iWon, reason){
   $('sbLmsMe').textContent  = fmtSecs(S.totalLockoutMs);
   $('sbLmsOp').textContent  = opKnown ? fmtSecs(S.ghostTotalLockoutMs) : '—';
 }
-function hideResult(){ $('result').classList.remove('on'); }
+function hideResult(){ $('result').classList.remove('on'); $('btnBackToResults').hidden = true; }
 
 /* ============================================================
    START SCREEN / LOBBY
@@ -1969,9 +2064,23 @@ function rematch(boardIndex){
   showOverlay('countdown');
   runCountdown(()=>{ hideOverlay(); startRace(); });
 }
-$('btnRematchSame').addEventListener('click',()=>rematch(game.boardIndex));
-/* undefined -> next board from the difficulty's rotation */
-$('btnRematchNew').addEventListener('click',()=>rematch());
+/* Board: step off the end screen to look at the finished grid, with a pill to
+   come back. */
+$('btnEndBoard').addEventListener('click',()=>{
+  $('result').classList.remove('on');
+  $('btnBackToResults').hidden = false;
+});
+$('btnBackToResults').addEventListener('click',()=>{
+  $('btnBackToResults').hidden = true;
+  $('result').classList.add('on');
+});
+/* TODO(analysis): a per-move review screen — where the time went, which cells
+   cost the mistakes. Nothing to show yet, so this is a placeholder. */
+$('btnEndAnalysis').addEventListener('click',()=>{});
+
+/* Rematch takes the next board from the rotation, so a replay isn't the puzzle
+   you just saw. Pass game.boardIndex instead if you want the same one. */
+$('btnRematchSame').addEventListener('click',()=>rematch());
 /* the match is already over here, so no confirmation is needed */
 $('btnHome').addEventListener('click',()=>quitToMenu());
 
