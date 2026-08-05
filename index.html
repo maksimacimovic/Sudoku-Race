@@ -96,7 +96,7 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .op  .portrait{box-shadow:0 0 0 var(--av-ring) var(--danger);}
 .locked .me .portrait{box-shadow:0 0 0 var(--av-ring) var(--teal-300);}
 .sidename{font:700 11px/1.2 var(--font); white-space:nowrap;
-  max-width:var(--av); overflow:hidden; text-overflow:ellipsis;}
+  width:var(--av); text-align:center; overflow:hidden; text-overflow:ellipsis;}
 .me .sidename{color:var(--teal-700);}
 .op .sidename{color:var(--danger);}
 .locked .me .sidename{color:var(--teal-300);}
@@ -148,7 +148,12 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 /* ---------- lives ----------
    Hearts sit above each portrait. Spent hearts stay in place, greyed, so the
    count never shifts around. */
-.hearts{display:flex; gap:4px; height:var(--lives-h); justify-content:center;}
+.hearts{display:flex; gap:4px; height:var(--lives-h); justify-content:center;
+  width:var(--av);}
+/* the side column is wider than the portrait now the counter sits beside it, so
+   pull the portrait's labels to its side rather than the column's centre */
+.me .hearts,.me .sidename{margin-right:auto;}
+.op .hearts,.op .sidename{margin-left:auto;}
 .heart{width:var(--lives-h); height:var(--lives-h); display:block; flex:none;}
 .heart path{fill:var(--danger);}
 .heart.lost path{fill:var(--border-soft);}
