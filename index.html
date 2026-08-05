@@ -1943,6 +1943,7 @@ function syncDevButtons(){
 }
 function autoWin(){
   if(!S || !S.started || S.over || game.mode!=='solo') return;
+  $('debug').classList.remove('on');   // get out of the way so the ending is visible
   for(let i=0;i<81;i++) if(S.puzzle[i]==='0' && S.grid[i]===0){
     S.grid[i]=S.solution[i]; S.notes[i]=new Set(); renderCell(i);
   }
@@ -1951,6 +1952,7 @@ function autoWin(){
 }
 function autoLose(){
   if(!S || !S.started || S.over || game.mode!=='solo') return;
+  $('debug').classList.remove('on');   // get out of the way so the ending is visible
   S.ghostFilled = S.totalEmpty;
   paintRail();
   opponentFinished();               // red reveal, then the card
