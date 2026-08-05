@@ -473,18 +473,23 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   50%    {transform:translateX(-50%) translateY(-3px)  scale(1.08)}}
 .endside.loser{opacity:.72;}
 
-/* stat table under the portraits */
-.scoreboard{width:100%; border-top:1px solid var(--border-soft);}
-.scoreboard .hdr,.scoreboard .row{display:grid; grid-template-columns:1fr 72px 72px;
-  gap:6px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-soft);}
+/* stat table under the portraits: your figure left, the label centred, theirs
+   right — colour-matched to each side so the columns need no re-reading. The
+   centre column is a fixed width so values align across rows. */
+.scoreboard{width:100%; font-family:var(--font); border-top:1px solid var(--border-soft);}
+.scoreboard .hdr,.scoreboard .row{display:grid; grid-template-columns:1fr 100px 1fr;
+  gap:6px; align-items:center; padding:9px 0; border-bottom:1px solid var(--border-soft);}
+.scoreboard span:first-child{text-align:left;}
+.scoreboard span:last-child{text-align:right;}
+.scoreboard .lbl{text-align:center;}
+.scoreboard .row{font:700 15px/1 var(--font); font-variant-numeric:tabular-nums;}
+.scoreboard .row span:first-child{color:var(--teal-700);}
+.scoreboard .row span:last-child{color:var(--danger);}
+.scoreboard .row .lbl{font:400 12px/1.2 var(--font); color:var(--fg-4);}
 .scoreboard .hdr{font:700 11px/1.25 var(--font); text-transform:uppercase;
-  letter-spacing:.03em;}
-.scoreboard span:nth-child(2),.scoreboard span:nth-child(3){text-align:right;
-  font-variant-numeric:tabular-nums; overflow:hidden; text-overflow:ellipsis;}
+  letter-spacing:.04em;}
 .scoreboard .hdr .me{color:var(--teal-700);}
 .scoreboard .hdr .op{color:var(--danger);}
-.scoreboard .row{font:400 13px/1.2 var(--font); color:var(--fg-1);}
-.scoreboard .row span:first-child{text-align:left; color:var(--fg-4); font-size:12px;}
 
 .endbtns{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:2px;}
 .endbtns .btn{width:100%; padding:13px; font-size:15px;}
@@ -743,11 +748,13 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
     </div>
 
     <div class="scoreboard">
-      <div class="hdr"><span></span><span class="me" id="sbMe">You</span><span class="op" id="sbOp">Rival</span></div>
-      <div class="row"><span>Finish time</span><span id="sbTimeMe">—</span><span id="sbTimeOp">—</span></div>
-      <div class="row"><span>Mistakes</span><span id="sbMisMe">0</span><span id="sbMisOp">0</span></div>
-      <div class="row"><span>Lockouts</span><span id="sbLockMe">0</span><span id="sbLockOp">0</span></div>
-      <div class="row"><span>Locked total</span><span id="sbLmsMe">0s</span><span id="sbLmsOp">0s</span></div>
+      <div class="hdr">
+        <span class="me" id="sbMe">You</span><span class="lbl"></span><span class="op" id="sbOp">Rival</span>
+      </div>
+      <div class="row"><span id="sbTimeMe">—</span><span class="lbl">Time</span><span id="sbTimeOp">—</span></div>
+      <div class="row"><span id="sbMisMe">0</span><span class="lbl">Mistakes</span><span id="sbMisOp">0</span></div>
+      <div class="row"><span id="sbLockMe">0</span><span class="lbl">Lockouts</span><span id="sbLockOp">0</span></div>
+      <div class="row"><span id="sbLmsMe">0s</span><span class="lbl">Locked</span><span id="sbLmsOp">0s</span></div>
     </div>
 
     <div class="endbtns">
