@@ -34,6 +34,7 @@
   /* vertical chrome around the board — keep in sync with --chrome below */
   --pad-h:52px; --pad-top:14px; --disc:48px; --act-top:18px; --disc-font:19px;
   --av:64px; --av-ring:2px;        /* portrait size + its coloured ring */
+  --crown:34px;                    /* the prize above the centre of the bar */
   --lives-h:18px;                  /* heart size, above each portrait */
   --rail-gap:22px;                 /* bar -> board breathing room */
   --chrome:380px;                  /* measured from the DOM (378) + 2px slack */
@@ -101,8 +102,20 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 .locked .me .sidename{color:var(--teal-300);}
 /* the rail is board-width, so the bar is exactly as long as the board */
 .barwrap{position:relative; margin-top:22px;}
-.crown{position:absolute; left:50%; top:-19px; transform:translateX(-50%);
-  width:22px; height:22px;}
+/* sits above the centre of the bar, dipping 3px into it */
+.crown{position:absolute; left:50%; top:calc(3px - var(--crown));
+  transform:translateX(-50%); width:var(--crown); height:var(--crown);}
+/* claimed! a cartoon hop — every keyframe repeats the centring translate, or the
+   animation would replace it and shunt the crown sideways */
+@keyframes srCrownWin{
+  0%  {transform:translateX(-50%) translateY(0)     scale(1)}
+  16% {transform:translateX(-50%) translateY(-12px) scale(1.55)}
+  34% {transform:translateX(-50%) translateY(0)     scale(1.10)}
+  52% {transform:translateX(-50%) translateY(-6px)  scale(1.34)}
+  72% {transform:translateX(-50%) translateY(0)     scale(1.04)}
+  86% {transform:translateX(-50%) translateY(-2px)  scale(1.12)}
+  100%{transform:translateX(-50%) translateY(0)     scale(1)}}
+.crown.win{animation:srCrownWin 1000ms cubic-bezier(.3,1.3,.4,1) 1;}
 .track{position:relative; height:16px; border-radius:var(--r-pill);
   background:var(--rail-bg); overflow:hidden;}
 .half{position:absolute; top:0; bottom:0; width:0; border-radius:var(--r-pill);
@@ -177,6 +190,7 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 @keyframes srAutoFill{0%{opacity:0; transform:scale(.45)}
   60%{opacity:1; transform:scale(1.10)}100%{opacity:1; transform:scale(1)}}
 .cell.autofill .dig{display:block; animation:srAutoFill 260ms ease-out 1 both;}
+.cell.revealed .dig{color:var(--num-error);}   /* filled in for you after a loss */
 
 /* ---------- lockout: ONE blur blocker, radial falloff (tuned via debug) ---------- */
 #lockout{position:absolute; inset:0; display:none; pointer-events:none; z-index:5;}
@@ -240,13 +254,6 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
   86%{opacity:1; transform:scale(1)}
   100%{opacity:0; transform:scale(.9)}}
 .emotepop.show{animation:srEmotePop 2600ms ease-out 1 both;}
-/* Auto complete lives between the two counters. The portrait row is taller than
-   the button, so it can appear without changing any height. */
-.railtop .autobtn{width:auto; align-self:center; height:auto; margin:0 8px;
-  padding:9px 11px; font:700 12px/1 var(--font); white-space:nowrap;}
-@media (max-width:360px){
-  .railtop .autobtn{padding:8px 7px; font-size:11px; margin:0 4px;}
-}
 .act{flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
   background:none; border:none; padding:0; cursor:pointer;}
 .act .disc{position:relative; width:var(--disc); height:var(--disc); border-radius:var(--r-pill);
@@ -272,7 +279,7 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
 @media (max-height:750px){
   :root{
     --pad-h:46px; --pad-top:12px; --disc:40px; --act-top:14px; --disc-font:16px;
-    --av:44px; --av-ring:2px;
+    --av:44px; --av-ring:2px; --crown:26px;
     --lives-h:16px; --rail-gap:12px;
     --chrome:328px;   /* measured 326 + 2px slack */
   }
@@ -439,9 +446,6 @@ header{height:44px; display:flex; align-items:center; justify-content:space-betw
         </div>
         <span class="sidename" id="myName">You</span>
       </div>
-      <!-- appears in the gap between the counters; the row is taller than the
-           button, so showing it shifts nothing -->
-      <button class="btn secondary autobtn" id="btnAutoComplete" hidden>Auto complete</button>
       <div class="side op" id="sideOp">
         <div class="hearts" id="heartsOp"></div>
         <div class="avrow">
@@ -815,8 +819,8 @@ function activePool(){ return BOARDS[game.difficulty] || BOARDS.easy; }
 /* setupBoard(index) draws from the pool of the currently selected difficulty.
    Pass no index to take the next board from the rotation. */
 function setupBoard(boardIndex){
-  stopAuto();                 // never let a running autofill bleed into a new board
-  showAutoComplete(false);
+  stopAuto();                 // never let a reveal bleed into a new board
+  document.querySelector('.crown').classList.remove('win');
   const pool = activePool();
   if(boardIndex===undefined || boardIndex<0 || boardIndex>=pool.length){
     boardIndex = nextBoardIndex(game.difficulty);
@@ -1417,50 +1421,87 @@ function fmtSecs(ms){
   return (s>=10 ? Math.round(s) : Math.round(s*10)/10)+'s';
 }
 
-/* The rival completed the board first. The race is decided, but nothing is
-   thrown in the player's face: the board stays live so they can keep solving,
-   and an "Auto complete" button appears if they'd rather just see it done. */
-function opponentFinished(){
-  if(S.decided || S.over) return;
-  S.decided = true;
-  S.ghostFinished = true;
-  S.ghostEndTime = performance.now();
-  showAutoComplete(true);
+/* ---------- how a race ends ----------
+   Win:  the crown takes a cartoon hop, then the results card.
+   Lose: the blanks you never reached fill themselves in red, then the card. */
+
+let autoTimer=null;
+function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
+
+function crownWin(){
+  const c=document.querySelector('.crown');
+  c.classList.remove('win'); void c.offsetWidth; c.classList.add('win');
 }
 
-/* ---------- running out of hearts ---------- */
+/* Drops the correct digit into every cell still empty, one at a time, marked red
+   so it reads as "here's what you didn't get" rather than as your own work. */
+function revealRemaining(done){
+  S.autoFilling = true;                 // blocks input while it runs
+  S.lockUntil = 0; endLockout(); updatePad(); clearPenalties();
+  const empties=[];
+  for(let i=0;i<81;i++) if(S.puzzle[i]==='0' && S.grid[i]===0) empties.push(i);
+  let k=0;
+  stopAuto();
+  autoTimer=setInterval(()=>{
+    if(k>=empties.length){ stopAuto(); S.autoFilling=false; done(); return; }
+    const i=empties[k++];
+    S.grid[i]=S.solution[i];
+    S.notes[i]=new Set();
+    renderCell(i);
+    const el=cellAt(i);
+    el.classList.add('revealed');
+    el.classList.remove('autofill'); void el.offsetWidth; el.classList.add('autofill');
+    updatePad();
+  }, 38);
+}
 
-/* My last heart is gone. Consistent with losing the race: no screen is thrown
-   in my face — input stops and the Auto complete button appears so I can see
-   the board out if I want. */
+function showResults(won, reason){
+  paintRail(); clearPenalties(); endLockout();
+  renderResults(won, reason);
+  $('result').classList.add('on');
+}
+
+/* the loser's ending: red reveal, then the card */
+function finishAsLoss(reason){
+  if(S.over) return;
+  S.over = true;
+  revealRemaining(()=>showResults(false, reason));
+}
+
+/* My last heart is gone — the board is lost. */
 function eliminateMe(){
   if(S.over || S.eliminated) return;
   S.eliminated = true;
   S.decided = true;
-  S.lockUntil = 0;
-  endLockout(); updatePad(); clearPenalties();
-  showAutoComplete(true);
   if(game.mode==='mp'){
     // `failed` rides along on the finished message — the server relays the whole
     // object untouched, so this needs no server change.
     net.send({t:'finished', failed:true, ms:Math.round(performance.now()-S.startTime),
               mistakes:S.mistakes, lockouts:S.lockouts, lockedMs:S.totalLockoutMs});
   }
+  finishAsLoss('You ran out of hearts.');
 }
 
-/* The opponent ran out. That decides it in my favour straight away. */
+/* The opponent completed the board first. */
+function opponentFinished(){
+  if(S.decided || S.over) return;
+  S.decided = true;
+  S.ghostFinished = true;
+  S.ghostEndTime = performance.now();
+  finishAsLoss('They filled the last cell first.');
+}
+
+/* The opponent ran out of hearts — that decides it my way. */
 function eliminateOpponent(){
   if(S.over) return;
   S.ghostEliminated = true;
   S.decided = true;
   S.over = true;
-  paintRail(); clearPenalties(); endLockout(); showAutoComplete(false);
-  renderResults(true, opponentName+' ran out of hearts.');
-  $('result').classList.add('on');
+  crownWin();
+  setTimeout(()=>showResults(true, opponentName+' ran out of hearts.'), 1000);
 }
 
-/* The player's board is now complete — either solved or auto-filled. This is
-   the only path that shows the results card. */
+/* I completed the board first. */
 function playerFinished(){
   if(S.over) return;
   S.over = true;
@@ -1468,48 +1509,14 @@ function playerFinished(){
   S.finished = true;
   S.myEndTime = performance.now();
   paintRail();          // the loop stops here, so draw the finishing notch now
-  clearPenalties();     // …and drop any X still showing, for the same reason
-  endLockout();
-  showAutoComplete(false);
   if(game.mode==='mp'){
     net.send({t:'progress', filled:S.totalEmpty});
     net.send({t:'finished', ms:Math.round(S.myEndTime-S.startTime),
               mistakes:S.mistakes, lockouts:S.lockouts, lockedMs:S.totalLockoutMs});
   }
-  // beaten to it, or already out of hearts => not a win
-  renderResults(!S.ghostFinished && !S.eliminated,
-                S.eliminated ? 'You ran out of hearts.' : null);
-  $('result').classList.add('on');
+  crownWin();                                    // a beat of celebration first
+  setTimeout(()=>showResults(true, null), 1000);
 }
-
-/* ---------- auto complete ---------- */
-function showAutoComplete(on){
-  $('btnAutoComplete').hidden = !on;   // the row is taller than it, so nothing shifts
-}
-let autoTimer=null;
-function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } }
-function autoComplete(){
-  if(!S || S.over || S.autoFilling) return;
-  S.autoFilling = true;                 // blocks manual input while it runs
-  showAutoComplete(false);
-  S.lockUntil = 0; endLockout(); updatePad();
-  const empties=[];
-  for(let i=0;i<81;i++) if(S.puzzle[i]==='0' && S.grid[i]===0) empties.push(i);
-  let k=0;
-  stopAuto();
-  autoTimer=setInterval(()=>{
-    if(k>=empties.length){ stopAuto(); S.autoFilling=false; playerFinished(); return; }
-    const i=empties[k++];
-    S.grid[i]=S.solution[i];
-    S.notes[i]=new Set();
-    renderCell(i);
-    const el=cellAt(i);
-    el.classList.remove('autofill'); void el.offsetWidth; el.classList.add('autofill');
-    updatePad();
-    netProgress();
-  }, 45);
-}
-$('btnAutoComplete').addEventListener('click', autoComplete);
 
 function renderResults(iWon, reason){
   // Solo: derived from the ghost. Multiplayer: relayed by the opponent.
@@ -1802,13 +1809,16 @@ function onDisconnected(){
 }
 
 function onOpponentLeft(){
-  // They forfeited. Leave the board playable rather than yanking the screen.
-  if(S && S.started && !S.over){
-    S.decided = true;
-    showAutoComplete(true);
-  }
   $('codeErr').textContent = opponentName+' left the match.';
-  if(!S || !S.started) { showOverlay('mp'); }
+  if(S && S.started && !S.over){
+    // walking out is a forfeit, so the win is mine
+    S.decided = true;
+    S.over = true;
+    crownWin();
+    setTimeout(()=>showResults(true, opponentName+' left the match.'), 1000);
+    return;
+  }
+  if(!S || !S.started) showOverlay('mp');
 }
 
 /* ---------- multiplayer: create ---------- */
@@ -1888,7 +1898,6 @@ function quitToMenu(){
   hideResult();
   stopCountdown();
   stopAuto();
-  showAutoComplete(false);
   if(game.mode==='mp'){ net.send({t:'leave'}); net.close(); }
   game.mode = 'solo';
   game.roomCode = null;
